@@ -196,33 +196,15 @@ void vga_init(void) {
     vga_set_mode_13h();
     
     for (int i = 0; i < 16; i++) {
-        uint8_t r = 0, g = 0, b = 0;
-        switch (i) {
-            case 0:  r = 0;  g = 0;  b = 0;  break;
-            case 1:  r = 0;  g = 0;  b = 42; break;
-            case 2:  r = 0;  g = 42; b = 0;  break;
-            case 3:  r = 0;  g = 42; b = 42; break;
-            case 4:  r = 42; g = 0;  b = 0;  break;
-            case 5:  r = 42; g = 0;  b = 42; break;
-            case 6:  r = 42; g = 21; b = 0;  break;
-            case 7:  r = 42; g = 42; b = 42; break;
-            case 8:  r = 21; g = 21; b = 21; break;
-            case 9:  r = 21; g = 21; b = 63; break;
-            case 10: r = 21; g = 63; b = 21; break;
-            case 11: r = 21; g = 63; b = 63; break;
-            case 12: r = 63; g = 21; b = 21; break;
-            case 13: r = 63; g = 21; b = 63; break;
-            case 14: r = 63; g = 63; b = 21; break;
-            case 15: r = 63; g = 63; b = 63; break;
-        }
-        vga_set_palette(i, r, g, b);
+        uint8_t gray = (i * 63) / 15;
+        vga_set_palette(i, gray, gray, gray);
     }
     
-    vga_set_palette(16, 20, 20, 35);
-    vga_set_palette(17, 30, 30, 45);
-    vga_set_palette(18, 40, 40, 55);
-    vga_set_palette(19, 25, 25, 40);
-    vga_set_palette(20, 15, 15, 30);
+    vga_set_palette(16, 20, 20, 20);
+    vga_set_palette(17, 30, 30, 30);
+    vga_set_palette(18, 40, 40, 40);
+    vga_set_palette(19, 25, 25, 25);
+    vga_set_palette(20, 15, 15, 15);
 }
 
 void vga_set_mode_13h(void) {
