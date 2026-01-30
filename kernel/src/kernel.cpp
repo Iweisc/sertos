@@ -7,8 +7,8 @@
 #include "../include/cpu/idt.hpp"
 #include "../include/cpu/pic.hpp"
 #include "../include/cpu/io.hpp"
-#include "../include/fs/vfs.hpp"
-#include "../include/fs/ramfs.hpp"
+#include "../include/disk/ata.hpp"
+#include "../include/fs/sertfs.hpp"
 #include "../include/input/keyboard.hpp"
 #include "../include/shell/shell.hpp"
 
@@ -153,6 +153,7 @@ extern "C" void kernelMain(sertos::boot::BootInfo* bootInfo) {
     using namespace sertos::memory;
     using namespace sertos::cpu;
     using namespace sertos::fs;
+    using namespace sertos::disk;
     using namespace sertos::input;
     using namespace sertos::shell;
     
@@ -235,35 +236,84 @@ extern "C" void kernelMain(sertos::boot::BootInfo* bootInfo) {
     Console::println("OK");
     Console::setForeground(Color::white());
     
-    Console::print("Initializing VFS... ");
-    VFS::initialize();
-    Console::setForeground(Color::green());
-    Console::println("OK");
-    Console::setForeground(Color::white());
-    
-    Console::print("Mounting RamFS at /... ");
-    if (VFS::mount("ramfs", "/")) {
+    Console::print("Initializing ATA... ");
+    ATA::initialize();
+    if (ATA::driveCount() > 0) {
         Console::setForeground(Color::green());
         Console::println("OK");
         Console::setForeground(Color::white());
+        
+        Console::print("  Drives found: ");
+        Console::printDec(ATA::driveCount());
+        Console::println("");
+        
+        for (u8 i = 0; i < ATA::driveCount(); i++) {
+            AtaDrive* drive = ATA::getDrive(i);
+            if (drive && drive->present) {
+                Console::print("  Drive ");
+                Console::printDec(i);
+                Console::print(": ");
+                Console::print(drive->model);
+                Console::print(" (");
+                Console::printDec(ATA::capacity(i) / MB);
+                Console::println(" MB)");
+            }
+        }
     } else {
+        Console::setForeground(Color::yellow());
+        Console::println("No drives found");
+        Console::setForeground(Color::white());
+    }
+    
+    Console::print("Initializing SertFS... ");
+    bool fsReady = false;
+    
+    u8 storageDrive = ATA::driveCount() > 1 ? 1 : 0;
+    
+    if (ATA::driveCount() > 0) {
+        if (SertFs::initialize(storageDrive)) {
+            if (SertFs::mount("/")) {
+                Console::setForeground(Color::green());
+                Console::println("OK (mounted existing filesystem)");
+                Console::setForeground(Color::white());
+                fsReady = true;
+            } else {
+                Console::setForeground(Color::yellow());
+                Console::println("Formatting...");
+                Console::setForeground(Color::white());
+                
+                if (SertFs::format(storageDrive, "SertOS")) {
+                    if (SertFs::mount("/")) {
+                        Console::print("  ");
+                        Console::setForeground(Color::green());
+                        Console::println("Filesystem created and mounted");
+                        Console::setForeground(Color::white());
+                        
+                        SertFs::createDirectory("/bin");
+                        SertFs::createDirectory("/etc");
+                        SertFs::createDirectory("/home");
+                        SertFs::createDirectory("/tmp");
+                        SertFs::createDirectory("/var");
+                        
+                        FileHandle motdFile = SertFs::open("/etc/motd", O_WRITE | O_CREATE);
+                        if (motdFile.valid) {
+                            const char* motd = "Welcome to SertOS!\nType 'help' for available commands.\n";
+                            SertFs::write(&motdFile, motd, 56);
+                            SertFs::close(&motdFile);
+                        }
+                        
+                        fsReady = true;
+                    }
+                }
+            }
+        }
+    }
+    
+    if (!fsReady) {
         Console::setForeground(Color::red());
         Console::println("FAILED");
         Console::setForeground(Color::white());
-        Kernel::panic("Failed to mount root filesystem");
-    }
-    
-    VFS::createDirectory("/bin");
-    VFS::createDirectory("/etc");
-    VFS::createDirectory("/home");
-    VFS::createDirectory("/tmp");
-    VFS::createDirectory("/var");
-    
-    FileHandle welcomeFile = VFS::open("/etc/motd", O_WRITE | O_CREATE);
-    if (welcomeFile.valid) {
-        const char* motd = "Welcome to SertOS!\nType 'help' for available commands.\n";
-        VFS::write(&welcomeFile, motd, 56);
-        VFS::close(&welcomeFile);
+        Console::println("  Warning: No persistent storage available");
     }
     
     PIC::clearMask(0);
@@ -279,6 +329,14 @@ extern "C" void kernelMain(sertos::boot::BootInfo* bootInfo) {
     Console::setForeground(Color::green());
     Console::println("SertOS initialized successfully!");
     Console::setForeground(Color::white());
+    
+    if (fsReady) {
+        Console::print("Disk space: ");
+        Console::printDec(SertFs::freeSpace() / MB);
+        Console::print(" MB free / ");
+        Console::printDec(SertFs::totalSpace() / MB);
+        Console::println(" MB total");
+    }
     
     Shell::initialize();
     Shell::run();

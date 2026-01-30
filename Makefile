@@ -9,7 +9,7 @@ OBJCOPY := objcopy
 
 # Flags for UEFI
 CXXFLAGS := -ffreestanding -fno-exceptions -fno-rtti -fno-stack-protector \
-            -fshort-wchar -mno-red-zone \
+            -fshort-wchar -mno-red-zone -mno-stack-arg-probe \
             -Wall -Wextra -O2 -std=c++17 \
             -I kernel/include -I boot/include \
             -D__KERNEL__ -DEFI_FUNCTION_WRAPPER
@@ -106,11 +106,17 @@ $(BUILD_DIR)/sertos-asm.img: $(BUILD_DIR)/BOOTX64-asm.EFI
 	rmdir $(BUILD_DIR)/mnt
 	@echo "Build complete: $@"
 
-# Run in QEMU
-run: $(OS_IMG)
+# Create persistent storage disk
+$(BUILD_DIR)/storage.img:
+	dd if=/dev/zero of=$@ bs=1M count=128 2>/dev/null
+	@echo "Created storage disk: $@"
+
+# Run in QEMU with persistent storage
+run: $(OS_IMG) $(BUILD_DIR)/storage.img
 	qemu-system-x86_64 \
 		-bios /usr/share/ovmf/OVMF.fd \
-		-drive file=$(OS_IMG),format=raw \
+		-drive file=$(OS_IMG),format=raw,if=ide \
+		-drive file=$(BUILD_DIR)/storage.img,format=raw,if=ide \
 		-m 256M \
 		-serial stdio \
 		-no-reboot \
@@ -127,10 +133,11 @@ run-asm: $(BUILD_DIR)/sertos-asm.img
 		-no-shutdown
 
 # Run with debugging
-debug: $(OS_IMG)
+debug: $(OS_IMG) $(BUILD_DIR)/storage.img
 	qemu-system-x86_64 \
 		-bios /usr/share/ovmf/OVMF.fd \
-		-drive file=$(OS_IMG),format=raw \
+		-drive file=$(OS_IMG),format=raw,if=ide \
+		-drive file=$(BUILD_DIR)/storage.img,format=raw,if=ide \
 		-m 256M \
 		-serial stdio \
 		-no-reboot \

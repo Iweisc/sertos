@@ -1,8 +1,8 @@
 #include "../../include/shell/shell.hpp"
 #include "../../include/graphics/console.hpp"
 #include "../../include/input/keyboard.hpp"
-#include "../../include/fs/vfs.hpp"
-#include "../../include/fs/ramfs.hpp"
+#include "../../include/fs/sertfs.hpp"
+#include "../../include/disk/ata.hpp"
 #include "../../include/memory/pmm.hpp"
 
 namespace sertos::shell {
@@ -28,6 +28,8 @@ const Command Shell::sCommands[] = {
     {"stat", "Display file information", cmdStat},
     {"tree", "Display directory tree", cmdTree},
     {"mem", "Display memory information", cmdMem},
+    {"df", "Display disk space information", cmdDf},
+    {"disk", "Display disk information", cmdDisk},
 };
 
 usize Shell::sCommandCount = sizeof(sCommands) / sizeof(sCommands[0]);
@@ -53,6 +55,28 @@ int strCompare(const char* a, const char* b) {
 
 bool isWhitespace(char c) {
     return c == ' ' || c == '\t';
+}
+
+void pathJoin(const char* base, const char* relative, char* result) {
+    usize baseLen = strLen(base);
+    usize relLen = strLen(relative);
+    usize i = 0;
+    
+    while (i < baseLen && i < MAX_PATH - 1) {
+        result[i] = base[i];
+        i++;
+    }
+    
+    if (i > 0 && result[i-1] != '/' && i < MAX_PATH - 1) {
+        result[i++] = '/';
+    }
+    
+    usize j = 0;
+    while (j < relLen && i < MAX_PATH - 1) {
+        result[i++] = relative[j++];
+    }
+    
+    result[i] = '\0';
 }
 
 }
@@ -111,7 +135,7 @@ void Shell::printPrompt() {
     Console::setForeground(Color::white());
     Console::print(":");
     Console::setForeground(Color::blue());
-    Console::print(VFS::currentDirectory());
+    Console::print(SertFs::currentDirectory());
     Console::setForeground(Color::white());
     Console::print("$ ");
 }
@@ -207,13 +231,13 @@ void Shell::cmdEcho(int argc, char** argv) {
 void Shell::cmdPwd(int argc, char** argv) {
     (void)argc;
     (void)argv;
-    Console::println(VFS::currentDirectory());
+    Console::println(SertFs::currentDirectory());
 }
 
 void Shell::cmdCd(int argc, char** argv) {
     const char* path = argc > 1 ? argv[1] : "/";
     
-    if (!VFS::changeDirectory(path)) {
+    if (!SertFs::changeDirectory(path)) {
         Console::setForeground(Color::red());
         Console::print("cd: ");
         Console::print(path);
@@ -225,7 +249,7 @@ void Shell::cmdCd(int argc, char** argv) {
 void Shell::cmdLs(int argc, char** argv) {
     const char* path = argc > 1 ? argv[1] : ".";
     
-    DirHandle dir = VFS::openDir(path);
+    DirHandle dir = SertFs::openDir(path);
     if (!dir.valid) {
         Console::setForeground(Color::red());
         Console::print("ls: ");
@@ -236,7 +260,7 @@ void Shell::cmdLs(int argc, char** argv) {
     }
     
     DirEntry entry;
-    while (VFS::readDir(&dir, &entry)) {
+    while (SertFs::readDir(&dir, &entry)) {
         if (entry.type == FileType::Directory) {
             Console::setForeground(Color::blue());
         } else {
@@ -251,7 +275,7 @@ void Shell::cmdLs(int argc, char** argv) {
     }
     
     Console::setForeground(Color::white());
-    VFS::closeDir(&dir);
+    SertFs::closeDir(&dir);
 }
 
 void Shell::cmdMkdir(int argc, char** argv) {
@@ -260,7 +284,7 @@ void Shell::cmdMkdir(int argc, char** argv) {
         return;
     }
     
-    if (!VFS::createDirectory(argv[1])) {
+    if (!SertFs::createDirectory(argv[1])) {
         Console::setForeground(Color::red());
         Console::print("mkdir: ");
         Console::print(argv[1]);
@@ -275,11 +299,11 @@ void Shell::cmdTouch(int argc, char** argv) {
         return;
     }
     
-    if (VFS::exists(argv[1])) {
+    if (SertFs::exists(argv[1])) {
         return;
     }
     
-    if (!VFS::createFile(argv[1])) {
+    if (!SertFs::createFile(argv[1])) {
         Console::setForeground(Color::red());
         Console::print("touch: ");
         Console::print(argv[1]);
@@ -294,7 +318,7 @@ void Shell::cmdRm(int argc, char** argv) {
         return;
     }
     
-    if (!VFS::remove(argv[1])) {
+    if (!SertFs::remove(argv[1])) {
         Console::setForeground(Color::red());
         Console::print("rm: ");
         Console::print(argv[1]);
@@ -309,7 +333,7 @@ void Shell::cmdCat(int argc, char** argv) {
         return;
     }
     
-    FileHandle file = VFS::open(argv[1], O_READ);
+    FileHandle file = SertFs::open(argv[1], O_READ);
     if (!file.valid) {
         Console::setForeground(Color::red());
         Console::print("cat: ");
@@ -322,13 +346,13 @@ void Shell::cmdCat(int argc, char** argv) {
     char buffer[256];
     i64 bytesRead;
     
-    while ((bytesRead = VFS::read(&file, buffer, sizeof(buffer) - 1)) > 0) {
+    while ((bytesRead = SertFs::read(&file, buffer, sizeof(buffer) - 1)) > 0) {
         buffer[bytesRead] = '\0';
         Console::print(buffer);
     }
     
     Console::println("");
-    VFS::close(&file);
+    SertFs::close(&file);
 }
 
 void Shell::cmdWrite(int argc, char** argv) {
@@ -337,7 +361,7 @@ void Shell::cmdWrite(int argc, char** argv) {
         return;
     }
     
-    FileHandle file = VFS::open(argv[1], O_WRITE | O_CREATE | O_TRUNCATE);
+    FileHandle file = SertFs::open(argv[1], O_WRITE | O_CREATE | O_TRUNCATE);
     if (!file.valid) {
         Console::setForeground(Color::red());
         Console::print("write: ");
@@ -349,13 +373,13 @@ void Shell::cmdWrite(int argc, char** argv) {
     
     for (int i = 2; i < argc; i++) {
         if (i > 2) {
-            VFS::write(&file, " ", 1);
+            SertFs::write(&file, " ", 1);
         }
-        VFS::write(&file, argv[i], strLen(argv[i]));
+        SertFs::write(&file, argv[i], strLen(argv[i]));
     }
-    VFS::write(&file, "\n", 1);
+    SertFs::write(&file, "\n", 1);
     
-    VFS::close(&file);
+    SertFs::close(&file);
 }
 
 void Shell::cmdMv(int argc, char** argv) {
@@ -364,7 +388,7 @@ void Shell::cmdMv(int argc, char** argv) {
         return;
     }
     
-    if (!VFS::rename(argv[1], argv[2])) {
+    if (!SertFs::rename(argv[1], argv[2])) {
         Console::setForeground(Color::red());
         Console::print("mv: ");
         Console::println("Failed to move/rename");
@@ -378,7 +402,7 @@ void Shell::cmdCp(int argc, char** argv) {
         return;
     }
     
-    FileHandle src = VFS::open(argv[1], O_READ);
+    FileHandle src = SertFs::open(argv[1], O_READ);
     if (!src.valid) {
         Console::setForeground(Color::red());
         Console::print("cp: ");
@@ -388,26 +412,26 @@ void Shell::cmdCp(int argc, char** argv) {
         return;
     }
     
-    FileHandle dst = VFS::open(argv[2], O_WRITE | O_CREATE | O_TRUNCATE);
+    FileHandle dst = SertFs::open(argv[2], O_WRITE | O_CREATE | O_TRUNCATE);
     if (!dst.valid) {
         Console::setForeground(Color::red());
         Console::print("cp: ");
         Console::print(argv[2]);
         Console::println(": Failed to create destination");
         Console::setForeground(Color::white());
-        VFS::close(&src);
+        SertFs::close(&src);
         return;
     }
     
     char buffer[512];
     i64 bytesRead;
     
-    while ((bytesRead = VFS::read(&src, buffer, sizeof(buffer))) > 0) {
-        VFS::write(&dst, buffer, bytesRead);
+    while ((bytesRead = SertFs::read(&src, buffer, sizeof(buffer))) > 0) {
+        SertFs::write(&dst, buffer, bytesRead);
     }
     
-    VFS::close(&src);
-    VFS::close(&dst);
+    SertFs::close(&src);
+    SertFs::close(&dst);
 }
 
 void Shell::cmdStat(int argc, char** argv) {
@@ -417,7 +441,7 @@ void Shell::cmdStat(int argc, char** argv) {
     }
     
     FileInfo info;
-    if (!VFS::getInfo(argv[1], &info)) {
+    if (!SertFs::getInfo(argv[1], &info)) {
         Console::setForeground(Color::red());
         Console::print("stat: ");
         Console::print(argv[1]);
@@ -445,24 +469,42 @@ void Shell::cmdStat(int argc, char** argv) {
     Console::print("  Size: ");
     Console::printDec(info.size);
     Console::println(" bytes");
+    
+    Console::print("  Permissions: ");
+    Console::printHex(info.permissions);
+    Console::println("");
 }
 
 void Shell::cmdTree(int argc, char** argv) {
     const char* path = argc > 1 ? argv[1] : ".";
     
     char resolved[MAX_PATH];
-    VFS::absolutePath(path, resolved);
+    if (path[0] == '/') {
+        usize i = 0;
+        while (path[i] && i < MAX_PATH - 1) {
+            resolved[i] = path[i];
+            i++;
+        }
+        resolved[i] = '\0';
+    } else {
+        pathJoin(SertFs::currentDirectory(), path, resolved);
+    }
     
     Console::println(resolved);
     printTree(resolved, 0);
 }
 
 void Shell::printTree(const char* path, int depth) {
-    DirHandle dir = VFS::openDir(path);
+    DirHandle dir = SertFs::openDir(path);
     if (!dir.valid) return;
     
     DirEntry entry;
-    while (VFS::readDir(&dir, &entry)) {
+    while (SertFs::readDir(&dir, &entry)) {
+        if (entry.name[0] == '.' && (entry.name[1] == '\0' || 
+            (entry.name[1] == '.' && entry.name[2] == '\0'))) {
+            continue;
+        }
+        
         for (int i = 0; i < depth; i++) {
             Console::print("    ");
         }
@@ -475,14 +517,14 @@ void Shell::printTree(const char* path, int depth) {
             Console::setForeground(Color::white());
             
             char childPath[MAX_PATH];
-            Path::join(path, entry.name, childPath);
+            pathJoin(path, entry.name, childPath);
             printTree(childPath, depth + 1);
         } else {
             Console::println(entry.name);
         }
     }
     
-    VFS::closeDir(&dir);
+    SertFs::closeDir(&dir);
 }
 
 void Shell::cmdMem(int argc, char** argv) {
@@ -505,6 +547,74 @@ void Shell::cmdMem(int argc, char** argv) {
     Console::print("  Free Memory: ");
     Console::printDec(memory::PMM::freeMemory() / MB);
     Console::println(" MB");
+}
+
+void Shell::cmdDf(int argc, char** argv) {
+    (void)argc;
+    (void)argv;
+    
+    if (!SertFs::isMounted()) {
+        Console::setForeground(Color::red());
+        Console::println("No filesystem mounted");
+        Console::setForeground(Color::white());
+        return;
+    }
+    
+    Console::println("Filesystem Information:");
+    
+    u64 total = SertFs::totalSpace();
+    u64 free = SertFs::freeSpace();
+    u64 used = total - free;
+    
+    Console::print("  Total:  ");
+    Console::printDec(total / MB);
+    Console::println(" MB");
+    
+    Console::print("  Used:   ");
+    Console::printDec(used / MB);
+    Console::println(" MB");
+    
+    Console::print("  Free:   ");
+    Console::printDec(free / MB);
+    Console::println(" MB");
+    
+    if (total > 0) {
+        Console::print("  Usage:  ");
+        Console::printDec((used * 100) / total);
+        Console::println("%");
+    }
+}
+
+void Shell::cmdDisk(int argc, char** argv) {
+    (void)argc;
+    (void)argv;
+    
+    Console::println("Disk Information:");
+    
+    u8 driveCount = disk::ATA::driveCount();
+    Console::print("  Detected drives: ");
+    Console::printDec(driveCount);
+    Console::println("");
+    
+    for (u8 i = 0; i < driveCount; i++) {
+        disk::AtaDrive* drive = disk::ATA::getDrive(i);
+        if (drive && drive->present) {
+            Console::println("");
+            Console::print("  Drive ");
+            Console::printDec(i);
+            Console::println(":");
+            
+            Console::print("    Model: ");
+            Console::println(drive->model);
+            
+            Console::print("    Capacity: ");
+            Console::printDec(disk::ATA::capacity(i) / MB);
+            Console::println(" MB");
+            
+            Console::print("    LBA48: ");
+            Console::println(drive->supportsLba48 ? "Yes" : "No");
+        }
+    }
 }
 
 }

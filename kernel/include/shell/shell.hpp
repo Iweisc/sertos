@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../types.hpp"
+#include "../fs/sertfs.hpp"
 
 namespace sertos::shell {
 
@@ -41,6 +42,8 @@ private:
     static void cmdStat(int argc, char** argv);
     static void cmdTree(int argc, char** argv);
     static void cmdMem(int argc, char** argv);
+    static void cmdDf(int argc, char** argv);
+    static void cmdDisk(int argc, char** argv);
     
     static void printTree(const char* path, int depth);
     

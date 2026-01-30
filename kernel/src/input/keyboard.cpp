@@ -2,6 +2,8 @@
 #include "../../include/graphics/console.hpp"
 #include "../../include/cpu/io.hpp"
 
+using namespace sertos::cpu;
+
 namespace sertos::input {
 
 KeyEvent Keyboard::sBuffer[KEYBOARD_BUFFER_SIZE];
@@ -156,14 +158,18 @@ KeyEvent Keyboard::getKey() {
 
 char Keyboard::getChar() {
     while (true) {
-        if (!hasKey()) {
-            cpu::hlt();
-            continue;
+        while (!(inb(0x64) & 0x01)) {
+            asm volatile("pause");
         }
         
-        KeyEvent event = getKey();
-        if (event.pressed && event.ascii != 0) {
-            return event.ascii;
+        u8 scancode = inb(0x60);
+        handleScancode(scancode);
+        
+        if (hasKey()) {
+            KeyEvent event = getKey();
+            if (event.pressed && event.ascii != 0) {
+                return event.ascii;
+            }
         }
     }
 }
