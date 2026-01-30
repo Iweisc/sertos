@@ -6,6 +6,10 @@
 
 static desktop_t desktop;
 static uint8_t last_seconds = 255;
+static int32_t mouse_x = 160;
+static int32_t mouse_y = 100;
+static bool mouse_left_pressed = false;
+static bool mouse_left_was_pressed = false;
 
 static void draw_desktop_background(void) {
     vga_draw_rect_filled(0, 0, VGA_WIDTH, VGA_HEIGHT - TASKBAR_HEIGHT, DESKTOP_COLOR);
@@ -138,6 +142,38 @@ void gui_update(void) {
     update_clock();
 }
 
+static void draw_mouse_cursor(void) {
+    int32_t x = mouse_x;
+    int32_t y = mouse_y;
+    
+    vga_put_pixel(x, y, 15);
+    if (x + 1 < VGA_WIDTH) vga_put_pixel(x + 1, y, 15);
+    if (y + 1 < VGA_HEIGHT) vga_put_pixel(x, y + 1, 15);
+    if (x + 1 < VGA_WIDTH && y + 1 < VGA_HEIGHT) vga_put_pixel(x + 1, y + 1, 0);
+    if (y + 2 < VGA_HEIGHT) vga_put_pixel(x, y + 2, 15);
+    if (x + 1 < VGA_WIDTH && y + 2 < VGA_HEIGHT) vga_put_pixel(x + 1, y + 2, 0);
+    if (y + 3 < VGA_HEIGHT) vga_put_pixel(x, y + 3, 15);
+    if (x + 1 < VGA_WIDTH && y + 3 < VGA_HEIGHT) vga_put_pixel(x + 1, y + 3, 15);
+    if (x + 2 < VGA_WIDTH && y + 3 < VGA_HEIGHT) vga_put_pixel(x + 2, y + 3, 0);
+    if (y + 4 < VGA_HEIGHT) vga_put_pixel(x, y + 4, 15);
+    if (x + 1 < VGA_WIDTH && y + 4 < VGA_HEIGHT) vga_put_pixel(x + 1, y + 4, 15);
+    if (x + 2 < VGA_WIDTH && y + 4 < VGA_HEIGHT) vga_put_pixel(x + 2, y + 4, 15);
+    if (x + 3 < VGA_WIDTH && y + 4 < VGA_HEIGHT) vga_put_pixel(x + 3, y + 4, 0);
+    if (y + 5 < VGA_HEIGHT) vga_put_pixel(x, y + 5, 15);
+    if (x + 1 < VGA_WIDTH && y + 5 < VGA_HEIGHT) vga_put_pixel(x + 1, y + 5, 0);
+    if (x + 2 < VGA_WIDTH && y + 5 < VGA_HEIGHT) vga_put_pixel(x + 2, y + 5, 15);
+    if (x + 3 < VGA_WIDTH && y + 5 < VGA_HEIGHT) vga_put_pixel(x + 3, y + 5, 15);
+    if (y + 6 < VGA_HEIGHT) vga_put_pixel(x, y + 6, 15);
+    if (x + 3 < VGA_WIDTH && y + 6 < VGA_HEIGHT) vga_put_pixel(x + 3, y + 6, 0);
+    if (x + 4 < VGA_WIDTH && y + 6 < VGA_HEIGHT) vga_put_pixel(x + 4, y + 6, 15);
+    if (y + 7 < VGA_HEIGHT) vga_put_pixel(x, y + 7, 15);
+    if (x + 4 < VGA_WIDTH && y + 7 < VGA_HEIGHT) vga_put_pixel(x + 4, y + 7, 0);
+}
+
+static bool point_in_rect(int32_t px, int32_t py, int rx, int ry, int rw, int rh) {
+    return px >= rx && px < rx + rw && py >= ry && py < ry + rh;
+}
+
 void gui_draw(void) {
     if (!desktop.needs_redraw) {
         return;
@@ -146,6 +182,7 @@ void gui_draw(void) {
     draw_desktop_background();
     draw_taskbar();
     draw_start_menu();
+    draw_mouse_cursor();
     
     desktop.needs_redraw = false;
 }
@@ -161,6 +198,37 @@ void gui_handle_key(uint8_t scancode, bool pressed) {
     if (pressed && scancode == KEY_SPACE) {
         gui_toggle_start_menu();
     }
+}
+
+void gui_handle_mouse(int32_t x, int32_t y, bool left_button, bool right_button) {
+    (void)right_button;
+    
+    mouse_x = x;
+    mouse_y = y;
+    mouse_left_pressed = left_button;
+    
+    taskbar_t* tb = &desktop.taskbar;
+    bool over_start = point_in_rect(x, y, 2, tb->bounds.y + 2, START_BUTTON_WIDTH, START_BUTTON_HEIGHT);
+    
+    if (over_start != tb->start_button_hovered) {
+        tb->start_button_hovered = over_start;
+        desktop.needs_redraw = true;
+    }
+    
+    if (mouse_left_pressed && !mouse_left_was_pressed) {
+        if (over_start) {
+            gui_toggle_start_menu();
+        } else if (desktop.start_menu.visible) {
+            start_menu_t* sm = &desktop.start_menu;
+            if (!point_in_rect(x, y, sm->bounds.x, sm->bounds.y, sm->bounds.width, sm->bounds.height)) {
+                desktop.start_menu.visible = false;
+                desktop.needs_redraw = true;
+            }
+        }
+    }
+    
+    mouse_left_was_pressed = mouse_left_pressed;
+    desktop.needs_redraw = true;
 }
 
 void gui_toggle_start_menu(void) {

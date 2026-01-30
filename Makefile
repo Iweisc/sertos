@@ -38,6 +38,9 @@ $(BUILD_DIR)/vga.o: $(KERNEL_DIR)/drivers/vga.c
 $(BUILD_DIR)/keyboard.o: $(KERNEL_DIR)/drivers/keyboard.c
 	$(CC) $(CFLAGS) $< -o $@
 
+$(BUILD_DIR)/mouse.o: $(KERNEL_DIR)/drivers/mouse.c
+	$(CC) $(CFLAGS) $< -o $@
+
 $(BUILD_DIR)/timer.o: $(KERNEL_DIR)/drivers/timer.c
 	$(CC) $(CFLAGS) $< -o $@
 
@@ -58,6 +61,7 @@ KERNEL_OBJS = $(BUILD_DIR)/kernel_entry.o \
               $(BUILD_DIR)/kernel.o \
               $(BUILD_DIR)/vga.o \
               $(BUILD_DIR)/keyboard.o \
+              $(BUILD_DIR)/mouse.o \
               $(BUILD_DIR)/timer.o \
               $(BUILD_DIR)/idt.o \
               $(BUILD_DIR)/heap.o \
@@ -69,7 +73,7 @@ $(BUILD_DIR)/kernel.bin: $(KERNEL_OBJS)
 
 $(BUILD_DIR)/os-image.bin: $(BUILD_DIR)/boot.bin $(BUILD_DIR)/kernel.bin
 	cat $^ > $@
-	@truncate -s 65536 $@
+	@truncate -s 131072 $@
 
 run: all
 	$(QEMU) -drive format=raw,file=$(BUILD_DIR)/os-image.bin

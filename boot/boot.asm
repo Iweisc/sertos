@@ -2,7 +2,7 @@
 [bits 16]
 
 KERNEL_OFFSET equ 0x1000
-KERNEL_SECTORS equ 32
+KERNEL_SECTORS equ 36
 
 start:
     cli

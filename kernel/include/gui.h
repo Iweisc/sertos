@@ -47,6 +47,7 @@ void gui_init(void);
 void gui_update(void);
 void gui_draw(void);
 void gui_handle_key(uint8_t scancode, bool pressed);
+void gui_handle_mouse(int32_t x, int32_t y, bool left_button, bool right_button);
 void gui_toggle_start_menu(void);
 
 desktop_t* gui_get_desktop(void);
