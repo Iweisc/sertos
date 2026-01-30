@@ -1,155 +1,191 @@
-# SertOS - A Custom Operating System
+# SertOS - A UEFI-Based Operating System
 
-SertOS is a fully custom operating system built from scratch without using any existing OS kernels like Linux, Unix, or FreeBSD. It features a graphical user interface with a taskbar, start menu, and real-time clock.
+SertOS is a minimal operating system built from scratch following LFS (Linux From Scratch) principles. It boots via UEFI (not legacy BIOS) and is designed with modern x86_64 architecture in mind.
 
 ## Features
 
-- **Custom Bootloader**: 16-bit real mode to 32-bit protected mode transition
-- **Custom Kernel**: Written entirely in C and x86 assembly
-- **VGA Graphics**: 320x200 256-color mode (Mode 13h)
-- **Interrupt Handling**: Full IDT with ISR and IRQ support
-- **Keyboard Driver**: PS/2 keyboard support with scancode translation
-- **Timer/RTC**: Programmable Interval Timer and Real-Time Clock
-- **Memory Management**: Simple heap allocator with malloc/free
-- **GUI Framework**: Desktop environment with:
-  - Desktop background
-  - Taskbar at the bottom
-  - Start menu (toggle with Space key)
-  - Real-time clock display
+- **UEFI Boot**: Native UEFI bootloader with PE/COFF executable format
+- **Graphics Output Protocol (GOP)**: Direct framebuffer access for graphics
+- **Memory Management**: UEFI memory map parsing and total RAM detection
+- **GDT/IDT Setup**: Proper x86_64 descriptor tables
+- **64-bit Long Mode**: Full 64-bit operation from the start
 
 ## Project Structure
 
 ```
 sertos/
 ├── boot/
-│   ├── boot.asm          # Main bootloader
-│   ├── gdt.asm           # Global Descriptor Table
-│   └── switch_pm.asm     # Protected mode switch
+│   └── src/
+│       └── minimal_efi.asm    # UEFI bootloader (assembly)
 ├── kernel/
-│   ├── include/          # Header files
-│   │   ├── types.h       # Basic type definitions
-│   │   ├── ports.h       # I/O port functions
-│   │   ├── vga.h         # VGA driver header
-│   │   ├── idt.h         # IDT definitions
-│   │   ├── keyboard.h    # Keyboard driver header
-│   │   ├── timer.h       # Timer/RTC header
-│   │   ├── heap.h        # Memory allocator header
-│   │   ├── string.h      # String functions header
-│   │   └── gui.h         # GUI framework header
-│   ├── drivers/
-│   │   ├── vga.c         # VGA graphics driver
-│   │   ├── keyboard.c    # Keyboard driver
-│   │   └── timer.c       # Timer and RTC driver
-│   ├── cpu/
-│   │   ├── idt.c         # IDT implementation
-│   │   └── isr.asm       # Interrupt service routines
-│   ├── mm/
-│   │   └── heap.c        # Heap memory allocator
-│   ├── lib/
-│   │   └── string.c      # String utility functions
-│   ├── gui/
-│   │   └── gui.c         # GUI implementation
-│   ├── kernel.c          # Main kernel entry
-│   ├── kernel_entry.asm  # Kernel entry point
-│   └── linker.ld         # Linker script
-├── scripts/
-│   └── build-cross-compiler.sh  # Cross compiler build script
-├── Makefile              # Build system
-└── README.md             # This file
+│   ├── include/               # C++ headers (for future expansion)
+│   │   ├── types.hpp
+│   │   ├── kernel.hpp
+│   │   ├── uefi/             # UEFI protocol definitions
+│   │   ├── graphics/         # Framebuffer and console
+│   │   ├── memory/           # PMM and VMM
+│   │   └── cpu/              # GDT, IDT, interrupts
+│   └── src/                   # C++ implementation files
+├── build/                     # Build output directory
+├── Makefile                   # Build system
+└── README.md                  # This file
+```
+
+## Requirements
+
+### Build Dependencies
+
+- **NASM**: Netwide Assembler for x86_64 assembly
+- **QEMU**: For testing (qemu-system-x86_64)
+- **OVMF**: UEFI firmware for QEMU
+- **dosfstools**: For creating FAT32 filesystem (mkfs.fat)
+
+### Installing Dependencies
+
+**Debian/Ubuntu:**
+
+```bash
+sudo apt install nasm qemu-system-x86 ovmf dosfstools
+```
+
+**Arch Linux:**
+
+```bash
+sudo pacman -S nasm qemu ovmf dosfstools
+```
+
+**Fedora:**
+
+```bash
+sudo dnf install nasm qemu ovmf dosfstools
 ```
 
 ## Building
 
-### Prerequisites
-
-1. **NASM** - Netwide Assembler
-2. **QEMU** - For testing (qemu-system-i386)
-3. **i686-elf Cross Compiler** - GCC cross compiler for i686-elf target
-
-### Installing Dependencies
-
-On Ubuntu/Debian:
-
 ```bash
-sudo apt-get install nasm qemu-system-x86 build-essential bison flex libgmp3-dev libmpc-dev libmpfr-dev texinfo wget
-```
-
-### Building the Cross Compiler
-
-```bash
-chmod +x scripts/build-cross-compiler.sh
-./scripts/build-cross-compiler.sh
-```
-
-Add the cross compiler to your PATH:
-
-```bash
-export PATH="$HOME/opt/cross/bin:$PATH"
-```
-
-### Building the OS
-
-```bash
-make clean
+# Build the OS image
 make
+
+# Clean build artifacts
+make clean
 ```
 
-### Running
+## Running
 
 ```bash
+# Run in QEMU with UEFI
 make run
-```
 
-This will launch QEMU with the OS image.
-
-### Debugging
-
-```bash
+# Run with debugging (GDB stub enabled)
 make debug
 ```
 
-This starts QEMU in debug mode and connects GDB.
+## Boot Output
 
-## Usage
+When SertOS boots successfully, you'll see:
 
-- **Space**: Toggle start menu
-- **Escape**: Close start menu
-- The clock in the taskbar shows the current time from the RTC
+```
+==========================================
+              SertOS v1.0
+==========================================
+
+[....] Disabling watchdog timer
+       [ OK ]
+[....] Initializing graphics
+       [ OK ]
+       Resolution: 1280x800
+[....] Getting memory map
+       [ OK ]
+       Total RAM: 206 MB
+[....] Initializing kernel
+       [ OK ]
+
+Boot complete!
+
+Entering kernel main loop...
+```
 
 ## Technical Details
 
-### Boot Process
+### UEFI Bootloader
 
-1. BIOS loads the bootloader at 0x7C00
-2. Bootloader sets up the stack and loads the kernel from disk
-3. Bootloader switches from 16-bit real mode to 32-bit protected mode
-4. Control is transferred to the kernel at 0x1000
+The bootloader is a self-contained PE/COFF executable written in x86_64 assembly. It:
 
-### Memory Map
+1. Creates a valid PE header with DOS stub
+2. Clears the screen using UEFI ConOut protocol
+3. Disables the watchdog timer
+4. Locates and initializes the Graphics Output Protocol (GOP)
+5. Retrieves the UEFI memory map
+6. Sets up GDT and IDT
+7. Enters the kernel main loop
 
-- 0x0000 - 0x7BFF: Free (used by BIOS)
-- 0x7C00 - 0x7DFF: Bootloader
-- 0x1000 - 0xFFFF: Kernel
-- 0x100000+: Heap memory
+### Memory Layout
 
-### Graphics
+- **PE Image Base**: Relocated by UEFI loader
+- **Code Section**: 0x1000 (virtual address)
+- **Relocation Section**: 0x8000 (virtual address)
+- **Framebuffer**: Provided by GOP (typically at high physical address)
 
-The OS uses VGA Mode 13h (320x200, 256 colors) for graphics. The GUI is rendered using a custom graphics library that provides:
+### Calling Convention
 
-- Pixel plotting
-- Rectangle drawing (filled and outlined)
-- Line drawing (Bresenham's algorithm)
-- Text rendering (8x8 bitmap font)
+The bootloader uses the Microsoft x64 calling convention as required by UEFI:
 
-### Interrupts
+- First 4 arguments: RCX, RDX, R8, R9
+- Return value: RAX
+- Caller-saved: RAX, RCX, RDX, R8, R9, R10, R11
+- Callee-saved: RBX, RBP, RDI, RSI, R12-R15
 
-- IRQ0 (32): Timer - 100Hz tick for clock updates
-- IRQ1 (33): Keyboard - PS/2 keyboard input
+### UEFI Protocols Used
+
+- **EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL**: Console output
+- **EFI_GRAPHICS_OUTPUT_PROTOCOL**: Framebuffer access
+- **EFI_BOOT_SERVICES**: Memory map, watchdog timer
+
+## Architecture
+
+### Why Assembly?
+
+The bootloader is written in pure assembly to:
+
+1. Have complete control over the PE/COFF header format
+2. Avoid C runtime dependencies
+3. Ensure proper UEFI ABI compliance
+4. Minimize binary size
+
+### Future C++ Integration
+
+The kernel directory contains C++ headers and source files for future expansion. To integrate C++ code:
+
+1. Compile C++ to position-independent object files
+2. Link with a custom linker script
+3. Call from the assembly bootloader after exiting boot services
+
+## Extending SertOS
+
+### Adding Interrupt Handlers
+
+1. Populate the IDT entries in the assembly code
+2. Write interrupt service routines
+3. Load the IDT with `lidt`
+
+### Adding Filesystem Support
+
+1. Use UEFI Simple File System Protocol before exiting boot services
+2. Load kernel modules from the EFI System Partition
+3. Implement a VFS layer in the kernel
+
+### Adding Process Management
+
+1. Implement a scheduler
+2. Set up TSS (Task State Segment)
+3. Implement context switching
 
 ## License
 
 This project is provided as-is for educational purposes.
 
-## Author
+## References
 
-Custom OS development project.
+- [UEFI Specification](https://uefi.org/specifications)
+- [OSDev Wiki](https://wiki.osdev.org/)
+- [Intel 64 and IA-32 Architectures Software Developer's Manual](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html)
