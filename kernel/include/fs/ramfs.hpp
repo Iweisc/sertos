@@ -20,69 +20,66 @@ struct RamFsNode {
     u64 modifiedTime;
 };
 
-class RamFsFile : public FileNode {
-public:
-    void init(RamFsNode* node);
-    ~RamFsFile() override;
-    
-    i64 read(void* buffer, usize size) override;
-    i64 write(const void* buffer, usize size) override;
-    i64 seek(i64 offset, SeekMode mode) override;
-    i64 tell() override;
-    bool close() override;
-    bool getInfo(FileInfo* info) override;
-
-    RamFsNode* mNode;
-    usize mPosition;
-    bool mClosed;
+struct RamFsFileHandle {
+    RamFsNode* node;
+    usize position;
+    u32 flags;
+    bool valid;
 };
 
-class RamFsDirectory : public DirectoryNode {
-public:
-    void init(RamFsNode* node);
-    ~RamFsDirectory() override;
-    
-    bool readEntry(DirEntry* entry) override;
-    bool rewind() override;
-    bool close() override;
-    usize count() override;
-
-    RamFsNode* mNode;
-    RamFsNode* mCurrent;
-    bool mClosed;
+struct RamFsDirHandle {
+    RamFsNode* node;
+    RamFsNode* current;
+    bool valid;
 };
 
-class RamFs : public FileSystem {
+class RamFs {
 public:
-    RamFs();
-    ~RamFs() override;
+    static void initialize();
+    static bool mount(const char* mountPoint);
+    static bool unmount();
     
-    bool mount(const char* mountPoint) override;
-    bool unmount() override;
+    static FileHandle open(const char* path, u32 flags);
+    static i64 read(FileHandle* handle, void* buffer, usize size);
+    static i64 write(FileHandle* handle, const void* buffer, usize size);
+    static i64 seek(FileHandle* handle, i64 offset, SeekMode mode);
+    static i64 tell(FileHandle* handle);
+    static bool close(FileHandle* handle);
     
-    FileNode* open(const char* path, u32 flags) override;
-    DirectoryNode* openDir(const char* path) override;
+    static DirHandle openDir(const char* path);
+    static bool readDir(DirHandle* handle, DirEntry* entry);
+    static bool closeDir(DirHandle* handle);
     
-    bool exists(const char* path) override;
-    bool isFile(const char* path) override;
-    bool isDirectory(const char* path) override;
+    static bool exists(const char* path);
+    static bool isFile(const char* path);
+    static bool isDirectory(const char* path);
     
-    bool createFile(const char* path) override;
-    bool createDirectory(const char* path) override;
-    bool remove(const char* path) override;
-    bool rename(const char* oldPath, const char* newPath) override;
+    static bool createFile(const char* path);
+    static bool createDirectory(const char* path);
+    static bool remove(const char* path);
+    static bool rename(const char* oldPath, const char* newPath);
     
-    bool getInfo(const char* path, FileInfo* info) override;
+    static bool getInfo(const char* path, FileInfo* info);
+    
+    static const char* mountPoint() { return sMountPoint; }
+    static bool isMounted() { return sMounted; }
 
 private:
-    RamFsNode* findNode(const char* path);
-    RamFsNode* findParent(const char* path, char* childName);
-    RamFsNode* createNode(const char* name, FileType type, RamFsNode* parent);
-    void deleteNode(RamFsNode* node);
-    const char* skipMountPoint(const char* path);
+    static RamFsNode* findNode(const char* path);
+    static RamFsNode* findParent(const char* path, char* childName);
+    static RamFsNode* createNode(const char* name, FileType type, RamFsNode* parent);
+    static void deleteNode(RamFsNode* node);
+    static const char* skipMountPoint(const char* path);
     
-    RamFsNode* mRoot;
-    usize mNodeCount;
+    static RamFsNode* sRoot;
+    static usize sNodeCount;
+    static char sMountPoint[MAX_PATH];
+    static bool sMounted;
+    
+    static constexpr usize MAX_FILE_HANDLES = 32;
+    static constexpr usize MAX_DIR_HANDLES = 16;
+    static RamFsFileHandle sFileHandles[MAX_FILE_HANDLES];
+    static RamFsDirHandle sDirHandles[MAX_DIR_HANDLES];
 };
 
 }

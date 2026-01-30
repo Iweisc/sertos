@@ -1,5 +1,7 @@
 #pragma once
 
+using size_t = unsigned long long;
+
 namespace sertos {
 
 using u8 = unsigned char;

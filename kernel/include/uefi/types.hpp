@@ -11,19 +11,19 @@ using EfiPhysicalAddress = u64;
 using EfiVirtualAddress = u64;
 using Char16 = u16;
 
-constexpr EfiStatus EFI_SUCCESS = 0;
-constexpr EfiStatus EFI_LOAD_ERROR = 1;
-constexpr EfiStatus EFI_INVALID_PARAMETER = 2;
-constexpr EfiStatus EFI_UNSUPPORTED = 3;
-constexpr EfiStatus EFI_BAD_BUFFER_SIZE = 4;
-constexpr EfiStatus EFI_BUFFER_TOO_SMALL = 5;
-constexpr EfiStatus EFI_NOT_READY = 6;
-constexpr EfiStatus EFI_DEVICE_ERROR = 7;
-constexpr EfiStatus EFI_WRITE_PROTECTED = 8;
-constexpr EfiStatus EFI_OUT_OF_RESOURCES = 9;
-constexpr EfiStatus EFI_NOT_FOUND = 14;
-
 constexpr u64 EFI_ERROR_BIT = 0x8000000000000000ULL;
+
+constexpr EfiStatus EFI_SUCCESS = 0;
+constexpr EfiStatus EFI_LOAD_ERROR = EFI_ERROR_BIT | 1;
+constexpr EfiStatus EFI_INVALID_PARAMETER = EFI_ERROR_BIT | 2;
+constexpr EfiStatus EFI_UNSUPPORTED = EFI_ERROR_BIT | 3;
+constexpr EfiStatus EFI_BAD_BUFFER_SIZE = EFI_ERROR_BIT | 4;
+constexpr EfiStatus EFI_BUFFER_TOO_SMALL = EFI_ERROR_BIT | 5;
+constexpr EfiStatus EFI_NOT_READY = EFI_ERROR_BIT | 6;
+constexpr EfiStatus EFI_DEVICE_ERROR = EFI_ERROR_BIT | 7;
+constexpr EfiStatus EFI_WRITE_PROTECTED = EFI_ERROR_BIT | 8;
+constexpr EfiStatus EFI_OUT_OF_RESOURCES = EFI_ERROR_BIT | 9;
+constexpr EfiStatus EFI_NOT_FOUND = EFI_ERROR_BIT | 14;
 
 inline bool efi_error(EfiStatus status) {
     return (status & EFI_ERROR_BIT) != 0;

@@ -26,6 +26,11 @@ SECTIONS
     .data : ALIGN(4K)
     {
         *(.data .data.*)
+        
+        __init_array_start = .;
+        KEEP(*(.init_array))
+        KEEP(*(.init_array.*))
+        __init_array_end = .;
     } :data
 
     .bss : ALIGN(4K)

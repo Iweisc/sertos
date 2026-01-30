@@ -2,6 +2,8 @@
 
 #include "types.hpp"
 
+#define EFIAPI __attribute__((ms_abi))
+
 namespace sertos::uefi {
 
 struct EfiTableHeader {
@@ -19,15 +21,15 @@ struct EfiBootServices;
 struct EfiConfigurationTable;
 
 struct EfiSimpleTextOutputProtocol {
-    EfiStatus (*reset)(EfiSimpleTextOutputProtocol* self, bool extendedVerification);
-    EfiStatus (*outputString)(EfiSimpleTextOutputProtocol* self, const Char16* string);
-    EfiStatus (*testString)(EfiSimpleTextOutputProtocol* self, const Char16* string);
-    EfiStatus (*queryMode)(EfiSimpleTextOutputProtocol* self, usize modeNumber, usize* columns, usize* rows);
-    EfiStatus (*setMode)(EfiSimpleTextOutputProtocol* self, usize modeNumber);
-    EfiStatus (*setAttribute)(EfiSimpleTextOutputProtocol* self, usize attribute);
-    EfiStatus (*clearScreen)(EfiSimpleTextOutputProtocol* self);
-    EfiStatus (*setCursorPosition)(EfiSimpleTextOutputProtocol* self, usize column, usize row);
-    EfiStatus (*enableCursor)(EfiSimpleTextOutputProtocol* self, bool visible);
+    EfiStatus (EFIAPI *reset)(EfiSimpleTextOutputProtocol* self, bool extendedVerification);
+    EfiStatus (EFIAPI *outputString)(EfiSimpleTextOutputProtocol* self, const Char16* string);
+    EfiStatus (EFIAPI *testString)(EfiSimpleTextOutputProtocol* self, const Char16* string);
+    EfiStatus (EFIAPI *queryMode)(EfiSimpleTextOutputProtocol* self, usize modeNumber, usize* columns, usize* rows);
+    EfiStatus (EFIAPI *setMode)(EfiSimpleTextOutputProtocol* self, usize modeNumber);
+    EfiStatus (EFIAPI *setAttribute)(EfiSimpleTextOutputProtocol* self, usize attribute);
+    EfiStatus (EFIAPI *clearScreen)(EfiSimpleTextOutputProtocol* self);
+    EfiStatus (EFIAPI *setCursorPosition)(EfiSimpleTextOutputProtocol* self, usize column, usize row);
+    EfiStatus (EFIAPI *enableCursor)(EfiSimpleTextOutputProtocol* self, bool visible);
     void* mode;
 };
 
@@ -37,8 +39,8 @@ struct EfiInputKey {
 };
 
 struct EfiSimpleTextInputProtocol {
-    EfiStatus (*reset)(EfiSimpleTextInputProtocol* self, bool extendedVerification);
-    EfiStatus (*readKeyStroke)(EfiSimpleTextInputProtocol* self, EfiInputKey* key);
+    EfiStatus (EFIAPI *reset)(EfiSimpleTextInputProtocol* self, bool extendedVerification);
+    EfiStatus (EFIAPI *readKeyStroke)(EfiSimpleTextInputProtocol* self, EfiInputKey* key);
     EfiEvent waitForKey;
 };
 
@@ -48,11 +50,11 @@ struct EfiBootServices {
     void* raiseTPL;
     void* restoreTPL;
     
-    EfiStatus (*allocatePages)(EfiAllocateType type, EfiMemoryType memoryType, usize pages, EfiPhysicalAddress* memory);
-    EfiStatus (*freePages)(EfiPhysicalAddress memory, usize pages);
-    EfiStatus (*getMemoryMap)(usize* memoryMapSize, EfiMemoryDescriptor* memoryMap, usize* mapKey, usize* descriptorSize, u32* descriptorVersion);
-    EfiStatus (*allocatePool)(EfiMemoryType poolType, usize size, void** buffer);
-    EfiStatus (*freePool)(void* buffer);
+    EfiStatus (EFIAPI *allocatePages)(EfiAllocateType type, EfiMemoryType memoryType, usize pages, EfiPhysicalAddress* memory);
+    EfiStatus (EFIAPI *freePages)(EfiPhysicalAddress memory, usize pages);
+    EfiStatus (EFIAPI *getMemoryMap)(usize* memoryMapSize, EfiMemoryDescriptor* memoryMap, usize* mapKey, usize* descriptorSize, u32* descriptorVersion);
+    EfiStatus (EFIAPI *allocatePool)(EfiMemoryType poolType, usize size, void** buffer);
+    EfiStatus (EFIAPI *freePool)(void* buffer);
     
     void* createEvent;
     void* setTimer;
@@ -64,10 +66,10 @@ struct EfiBootServices {
     void* installProtocolInterface;
     void* reinstallProtocolInterface;
     void* uninstallProtocolInterface;
-    EfiStatus (*handleProtocol)(EfiHandle handle, const EfiGuid* protocol, void** interface);
+    EfiStatus (EFIAPI *handleProtocol)(EfiHandle handle, const EfiGuid* protocol, void** interface);
     void* reserved;
     void* registerProtocolNotify;
-    EfiStatus (*locateHandle)(u32 searchType, const EfiGuid* protocol, void* searchKey, usize* bufferSize, EfiHandle* buffer);
+    EfiStatus (EFIAPI *locateHandle)(u32 searchType, const EfiGuid* protocol, void* searchKey, usize* bufferSize, EfiHandle* buffer);
     void* locateDevicePath;
     void* installConfigurationTable;
     
@@ -75,11 +77,11 @@ struct EfiBootServices {
     void* startImage;
     void* exit;
     void* unloadImage;
-    EfiStatus (*exitBootServices)(EfiHandle imageHandle, usize mapKey);
+    EfiStatus (EFIAPI *exitBootServices)(EfiHandle imageHandle, usize mapKey);
     
     void* getNextMonotonicCount;
     void* stall;
-    EfiStatus (*setWatchdogTimer)(usize timeout, u64 watchdogCode, usize dataSize, const Char16* watchdogData);
+    EfiStatus (EFIAPI *setWatchdogTimer)(usize timeout, u64 watchdogCode, usize dataSize, const Char16* watchdogData);
     
     void* connectController;
     void* disconnectController;
@@ -89,8 +91,8 @@ struct EfiBootServices {
     void* openProtocolInformation;
     
     void* protocolsPerHandle;
-    EfiStatus (*locateHandleBuffer)(u32 searchType, const EfiGuid* protocol, void* searchKey, usize* noHandles, EfiHandle** buffer);
-    EfiStatus (*locateProtocol)(const EfiGuid* protocol, void* registration, void** interface);
+    EfiStatus (EFIAPI *locateHandleBuffer)(u32 searchType, const EfiGuid* protocol, void* searchKey, usize* noHandles, EfiHandle** buffer);
+    EfiStatus (EFIAPI *locateProtocol)(const EfiGuid* protocol, void* registration, void** interface);
     void* installMultipleProtocolInterfaces;
     void* uninstallMultipleProtocolInterfaces;
     
@@ -124,12 +126,12 @@ struct EfiTimeCapabilities {
 struct EfiRuntimeServices {
     EfiTableHeader header;
     
-    EfiStatus (*getTime)(EfiTime* time, EfiTimeCapabilities* capabilities);
-    EfiStatus (*setTime)(EfiTime* time);
+    EfiStatus (EFIAPI *getTime)(EfiTime* time, EfiTimeCapabilities* capabilities);
+    EfiStatus (EFIAPI *setTime)(EfiTime* time);
     void* getWakeupTime;
     void* setWakeupTime;
     
-    EfiStatus (*setVirtualAddressMap)(usize memoryMapSize, usize descriptorSize, u32 descriptorVersion, EfiMemoryDescriptor* virtualMap);
+    EfiStatus (EFIAPI *setVirtualAddressMap)(usize memoryMapSize, usize descriptorSize, u32 descriptorVersion, EfiMemoryDescriptor* virtualMap);
     void* convertPointer;
     
     void* getVariable;

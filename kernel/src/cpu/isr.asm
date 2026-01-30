@@ -93,8 +93,10 @@ isr_common_stub:
     push r14
     push r15
 
-    mov rdi, rsp
+    mov rcx, rsp
+    sub rsp, 32
     call isr_handler
+    add rsp, 32
 
     pop r15
     pop r14

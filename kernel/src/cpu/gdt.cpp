@@ -7,9 +7,6 @@ GdtEntry64 GDT::sTssEntry;
 GdtPointer GDT::sPointer;
 Tss GDT::sTss;
 
-extern "C" void gdt_flush(GdtPointer* pointer);
-extern "C" void tss_flush(u16 selector);
-
 void GDT::initialize() {
     for (u64 i = 0; i < sizeof(sTss); i++) {
         reinterpret_cast<u8*>(&sTss)[i] = 0;
@@ -73,19 +70,19 @@ void GDT::setTssEntry(u32 index, u64 base, u32 limit) {
 
 void GDT::loadGdt() {
     asm volatile(
-        "lgdt %0\n"
-        "push $0x08\n"
-        "lea 1f(%%rip), %%rax\n"
-        "push %%rax\n"
+        "lgdt (%0)\n"
+        "pushq $0x08\n"
+        "leaq 1f(%%rip), %%rax\n"
+        "pushq %%rax\n"
         "lretq\n"
         "1:\n"
-        "mov $0x10, %%ax\n"
-        "mov %%ax, %%ds\n"
-        "mov %%ax, %%es\n"
-        "mov %%ax, %%fs\n"
-        "mov %%ax, %%gs\n"
-        "mov %%ax, %%ss\n"
-        : : "m"(sPointer) : "rax", "memory"
+        "movw $0x10, %%ax\n"
+        "movw %%ax, %%ds\n"
+        "movw %%ax, %%es\n"
+        "movw %%ax, %%fs\n"
+        "movw %%ax, %%gs\n"
+        "movw %%ax, %%ss\n"
+        : : "r"(&sPointer) : "rax", "memory"
     );
 }
 

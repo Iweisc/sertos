@@ -2,6 +2,8 @@
 
 #include "types.hpp"
 
+#define EFIAPI __attribute__((ms_abi))
+
 namespace sertos::uefi {
 
 enum class EfiGraphicsPixelFormat : u32 {
@@ -53,9 +55,9 @@ enum class EfiGraphicsOutputBltOperation : u32 {
 };
 
 struct EfiGraphicsOutputProtocol {
-    EfiStatus (*queryMode)(EfiGraphicsOutputProtocol* self, u32 modeNumber, usize* sizeOfInfo, EfiGraphicsOutputModeInformation** info);
-    EfiStatus (*setMode)(EfiGraphicsOutputProtocol* self, u32 modeNumber);
-    EfiStatus (*blt)(EfiGraphicsOutputProtocol* self, EfiGraphicsOutputBltPixel* bltBuffer, EfiGraphicsOutputBltOperation bltOperation, usize sourceX, usize sourceY, usize destinationX, usize destinationY, usize width, usize height, usize delta);
+    EfiStatus (EFIAPI *queryMode)(EfiGraphicsOutputProtocol* self, u32 modeNumber, usize* sizeOfInfo, EfiGraphicsOutputModeInformation** info);
+    EfiStatus (EFIAPI *setMode)(EfiGraphicsOutputProtocol* self, u32 modeNumber);
+    EfiStatus (EFIAPI *blt)(EfiGraphicsOutputProtocol* self, EfiGraphicsOutputBltPixel* bltBuffer, EfiGraphicsOutputBltOperation bltOperation, usize sourceX, usize sourceY, usize destinationX, usize destinationY, usize width, usize height, usize delta);
     EfiGraphicsOutputProtocolMode* mode;
 };
 

@@ -74,4 +74,27 @@ inline void cpuid(u32 leaf, u32& eax, u32& ebx, u32& ecx, u32& edx) {
         : "a"(leaf), "c"(0));
 }
 
+constexpr u16 SERIAL_COM1 = 0x3F8;
+
+inline void serialInit() {
+    outb(SERIAL_COM1 + 1, 0x00);
+    outb(SERIAL_COM1 + 3, 0x80);
+    outb(SERIAL_COM1 + 0, 0x03);
+    outb(SERIAL_COM1 + 1, 0x00);
+    outb(SERIAL_COM1 + 3, 0x03);
+    outb(SERIAL_COM1 + 2, 0xC7);
+    outb(SERIAL_COM1 + 4, 0x0B);
+}
+
+inline void serialPutc(char c) {
+    while ((inb(SERIAL_COM1 + 5) & 0x20) == 0);
+    outb(SERIAL_COM1, c);
+}
+
+inline void serialPuts(const char* s) {
+    while (*s) {
+        serialPutc(*s++);
+    }
+}
+
 }

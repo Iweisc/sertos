@@ -7,6 +7,10 @@
 #include "../include/cpu/idt.hpp"
 #include "../include/cpu/pic.hpp"
 #include "../include/cpu/io.hpp"
+#include "../include/fs/vfs.hpp"
+#include "../include/fs/ramfs.hpp"
+#include "../include/input/keyboard.hpp"
+#include "../include/shell/shell.hpp"
 
 namespace sertos {
 
@@ -137,22 +141,7 @@ void keyboardHandler(sertos::cpu::InterruptFrame*) {
     using namespace sertos;
     
     u8 scancode = cpu::inb(0x60);
-    
-    static const char scancodeToAscii[] = {
-        0, 0, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b',
-        '\t', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n',
-        0, 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '`',
-        0, '\\', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 0,
-        '*', 0, ' '
-    };
-    
-    if (!(scancode & 0x80) && scancode < sizeof(scancodeToAscii)) {
-        char c = scancodeToAscii[scancode];
-        if (c) {
-            graphics::Console::putChar(c);
-        }
-    }
-    
+    input::Keyboard::handleScancode(scancode);
     cpu::PIC::sendEOI(1);
 }
 
@@ -163,6 +152,9 @@ extern "C" void kernelMain(sertos::boot::BootInfo* bootInfo) {
     using namespace sertos::graphics;
     using namespace sertos::memory;
     using namespace sertos::cpu;
+    using namespace sertos::fs;
+    using namespace sertos::input;
+    using namespace sertos::shell;
     
     Kernel::initialize(bootInfo);
     
@@ -234,6 +226,44 @@ extern "C" void kernelMain(sertos::boot::BootInfo* bootInfo) {
         Console::setForeground(Color::red());
         Console::println("FAILED");
         Console::setForeground(Color::white());
+        Kernel::panic("Failed to initialize physical memory manager");
+    }
+    
+    Console::print("Initializing Keyboard... ");
+    Keyboard::initialize();
+    Console::setForeground(Color::green());
+    Console::println("OK");
+    Console::setForeground(Color::white());
+    
+    Console::print("Initializing VFS... ");
+    VFS::initialize();
+    Console::setForeground(Color::green());
+    Console::println("OK");
+    Console::setForeground(Color::white());
+    
+    Console::print("Mounting RamFS at /... ");
+    if (VFS::mount("ramfs", "/")) {
+        Console::setForeground(Color::green());
+        Console::println("OK");
+        Console::setForeground(Color::white());
+    } else {
+        Console::setForeground(Color::red());
+        Console::println("FAILED");
+        Console::setForeground(Color::white());
+        Kernel::panic("Failed to mount root filesystem");
+    }
+    
+    VFS::createDirectory("/bin");
+    VFS::createDirectory("/etc");
+    VFS::createDirectory("/home");
+    VFS::createDirectory("/tmp");
+    VFS::createDirectory("/var");
+    
+    FileHandle welcomeFile = VFS::open("/etc/motd", O_WRITE | O_CREATE);
+    if (welcomeFile.valid) {
+        const char* motd = "Welcome to SertOS!\nType 'help' for available commands.\n";
+        VFS::write(&welcomeFile, motd, 56);
+        VFS::close(&welcomeFile);
     }
     
     PIC::clearMask(0);
@@ -249,8 +279,9 @@ extern "C" void kernelMain(sertos::boot::BootInfo* bootInfo) {
     Console::setForeground(Color::green());
     Console::println("SertOS initialized successfully!");
     Console::setForeground(Color::white());
-    Console::println("Type something (keyboard input enabled):");
-    Console::println("");
+    
+    Shell::initialize();
+    Shell::run();
     
     while (true) {
         hlt();

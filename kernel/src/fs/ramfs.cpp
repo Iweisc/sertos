@@ -5,29 +5,6 @@ namespace sertos::fs {
 
 namespace {
 
-usize stringLength(const char* str) {
-    usize len = 0;
-    while (str[len]) len++;
-    return len;
-}
-
-void stringCopy(char* dest, const char* src, usize maxLen) {
-    usize i = 0;
-    while (src[i] && i < maxLen - 1) {
-        dest[i] = src[i];
-        i++;
-    }
-    dest[i] = '\0';
-}
-
-int stringCompare(const char* a, const char* b) {
-    while (*a && *b && *a == *b) {
-        a++;
-        b++;
-    }
-    return *a - *b;
-}
-
 void memoryCopy(void* dest, const void* src, usize size) {
     auto* d = static_cast<u8*>(dest);
     auto* s = static_cast<const u8*>(src);
@@ -45,46 +22,144 @@ void memorySet(void* dest, u8 value, usize size) {
 
 }
 
-void RamFsFile::init(RamFsNode* node) {
-    stringCopy(mName, node->name, MAX_FILENAME);
-    mType = node->type;
-    mNode = node;
-    mPosition = 0;
-    mClosed = false;
+RamFsNode* RamFs::sRoot = nullptr;
+usize RamFs::sNodeCount = 0;
+char RamFs::sMountPoint[MAX_PATH] = "";
+bool RamFs::sMounted = false;
+RamFsFileHandle RamFs::sFileHandles[MAX_FILE_HANDLES];
+RamFsDirHandle RamFs::sDirHandles[MAX_DIR_HANDLES];
+
+void RamFs::initialize() {
+    sRoot = nullptr;
+    sNodeCount = 0;
+    sMounted = false;
+    sMountPoint[0] = '\0';
+    
+    for (usize i = 0; i < MAX_FILE_HANDLES; i++) {
+        sFileHandles[i].valid = false;
+    }
+    for (usize i = 0; i < MAX_DIR_HANDLES; i++) {
+        sDirHandles[i].valid = false;
+    }
 }
 
-RamFsFile::~RamFsFile() {
-    close();
+bool RamFs::mount(const char* mountPoint) {
+    if (sMounted || !mountPoint) {
+        return false;
+    }
+    
+    initialize();
+    
+    sRoot = createNode("/", FileType::Directory, nullptr);
+    if (!sRoot) {
+        return false;
+    }
+    
+    Path::copy(sMountPoint, mountPoint, MAX_PATH);
+    sMounted = true;
+    return true;
 }
 
-i64 RamFsFile::read(void* buffer, usize size) {
-    if (mClosed || !mNode || !buffer) {
+bool RamFs::unmount() {
+    if (!sMounted) {
+        return false;
+    }
+    
+    if (sRoot) {
+        deleteNode(sRoot);
+        sRoot = nullptr;
+    }
+    
+    sMounted = false;
+    sNodeCount = 0;
+    return true;
+}
+
+FileHandle RamFs::open(const char* path, u32 flags) {
+    FileHandle handle = {nullptr, 0, false};
+    
+    if (!sMounted || !path) {
+        return handle;
+    }
+    
+    const char* relativePath = skipMountPoint(path);
+    RamFsNode* node = findNode(relativePath);
+    
+    if (!node) {
+        if (flags & O_CREATE) {
+            if (!createFile(path)) {
+                return handle;
+            }
+            node = findNode(relativePath);
+        }
+        if (!node) {
+            return handle;
+        }
+    }
+    
+    if (node->type != FileType::Regular) {
+        return handle;
+    }
+    
+    if (flags & O_TRUNCATE) {
+        node->size = 0;
+    }
+    
+    for (usize i = 0; i < MAX_FILE_HANDLES; i++) {
+        if (!sFileHandles[i].valid) {
+            sFileHandles[i].node = node;
+            sFileHandles[i].position = (flags & O_APPEND) ? node->size : 0;
+            sFileHandles[i].flags = flags;
+            sFileHandles[i].valid = true;
+            
+            handle.fsData = &sFileHandles[i];
+            handle.flags = flags;
+            handle.valid = true;
+            return handle;
+        }
+    }
+    
+    return handle;
+}
+
+i64 RamFs::read(FileHandle* handle, void* buffer, usize size) {
+    if (!handle || !handle->valid || !buffer) {
         return -1;
     }
     
-    if (mPosition >= mNode->size) {
+    auto* fh = static_cast<RamFsFileHandle*>(handle->fsData);
+    if (!fh || !fh->valid || !fh->node) {
+        return -1;
+    }
+    
+    if (fh->position >= fh->node->size) {
         return 0;
     }
     
     usize bytesToRead = size;
-    if (mPosition + bytesToRead > mNode->size) {
-        bytesToRead = mNode->size - mPosition;
+    if (fh->position + bytesToRead > fh->node->size) {
+        bytesToRead = fh->node->size - fh->position;
     }
     
-    memoryCopy(buffer, mNode->data + mPosition, bytesToRead);
-    mPosition += bytesToRead;
+    memoryCopy(buffer, fh->node->data + fh->position, bytesToRead);
+    fh->position += bytesToRead;
     
     return static_cast<i64>(bytesToRead);
 }
 
-i64 RamFsFile::write(const void* buffer, usize size) {
-    if (mClosed || !mNode || !buffer) {
+i64 RamFs::write(FileHandle* handle, const void* buffer, usize size) {
+    if (!handle || !handle->valid || !buffer) {
         return -1;
     }
     
-    usize newSize = mPosition + size;
+    auto* fh = static_cast<RamFsFileHandle*>(handle->fsData);
+    if (!fh || !fh->valid || !fh->node) {
+        return -1;
+    }
     
-    if (newSize > mNode->capacity) {
+    usize newSize = fh->position + size;
+    
+    if (newSize > fh->node->capacity) {
         usize newCapacity = newSize * 2;
         if (newCapacity > RAMFS_MAX_FILE_SIZE) {
             newCapacity = RAMFS_MAX_FILE_SIZE;
@@ -99,31 +174,36 @@ i64 RamFsFile::write(const void* buffer, usize size) {
             return -1;
         }
         
-        if (mNode->data && mNode->size > 0) {
-            memoryCopy(newData, mNode->data, mNode->size);
+        if (fh->node->data && fh->node->size > 0) {
+            memoryCopy(newData, fh->node->data, fh->node->size);
         }
         
-        if (mNode->data) {
-            usize oldPages = (mNode->capacity + memory::PAGE_SIZE - 1) / memory::PAGE_SIZE;
-            memory::PMM::freePages(mNode->data, oldPages);
+        if (fh->node->data) {
+            usize oldPages = (fh->node->capacity + memory::PAGE_SIZE - 1) / memory::PAGE_SIZE;
+            memory::PMM::freePages(fh->node->data, oldPages);
         }
         
-        mNode->data = newData;
-        mNode->capacity = newCapacity;
+        fh->node->data = newData;
+        fh->node->capacity = newCapacity;
     }
     
-    memoryCopy(mNode->data + mPosition, buffer, size);
-    mPosition += size;
+    memoryCopy(fh->node->data + fh->position, buffer, size);
+    fh->position += size;
     
-    if (mPosition > mNode->size) {
-        mNode->size = mPosition;
+    if (fh->position > fh->node->size) {
+        fh->node->size = fh->position;
     }
     
     return static_cast<i64>(size);
 }
 
-i64 RamFsFile::seek(i64 offset, SeekMode mode) {
-    if (mClosed || !mNode) {
+i64 RamFs::seek(FileHandle* handle, i64 offset, SeekMode mode) {
+    if (!handle || !handle->valid) {
+        return -1;
+    }
+    
+    auto* fh = static_cast<RamFsFileHandle*>(handle->fsData);
+    if (!fh || !fh->valid || !fh->node) {
         return -1;
     }
     
@@ -133,10 +213,10 @@ i64 RamFsFile::seek(i64 offset, SeekMode mode) {
             newPos = offset;
             break;
         case SeekMode::Current:
-            newPos = static_cast<i64>(mPosition) + offset;
+            newPos = static_cast<i64>(fh->position) + offset;
             break;
         case SeekMode::End:
-            newPos = static_cast<i64>(mNode->size) + offset;
+            newPos = static_cast<i64>(fh->node->size) + offset;
             break;
         default:
             return -1;
@@ -146,203 +226,109 @@ i64 RamFsFile::seek(i64 offset, SeekMode mode) {
         return -1;
     }
     
-    mPosition = static_cast<usize>(newPos);
-    return static_cast<i64>(mPosition);
+    fh->position = static_cast<usize>(newPos);
+    return static_cast<i64>(fh->position);
 }
 
-i64 RamFsFile::tell() {
-    if (mClosed) {
+i64 RamFs::tell(FileHandle* handle) {
+    if (!handle || !handle->valid) {
         return -1;
     }
-    return static_cast<i64>(mPosition);
+    
+    auto* fh = static_cast<RamFsFileHandle*>(handle->fsData);
+    if (!fh || !fh->valid) {
+        return -1;
+    }
+    
+    return static_cast<i64>(fh->position);
 }
 
-bool RamFsFile::close() {
-    if (mClosed) {
+bool RamFs::close(FileHandle* handle) {
+    if (!handle || !handle->valid) {
         return false;
     }
-    mClosed = true;
+    
+    auto* fh = static_cast<RamFsFileHandle*>(handle->fsData);
+    if (!fh || !fh->valid) {
+        return false;
+    }
+    
+    fh->valid = false;
+    fh->node = nullptr;
+    handle->valid = false;
+    handle->fsData = nullptr;
+    
     return true;
 }
 
-bool RamFsFile::getInfo(FileInfo* info) {
-    if (!info || !mNode) {
-        return false;
-    }
+DirHandle RamFs::openDir(const char* path) {
+    DirHandle handle = {nullptr, false};
     
-    stringCopy(info->name, mNode->name, MAX_FILENAME);
-    info->type = mNode->type;
-    info->size = mNode->size;
-    info->createdTime = mNode->createdTime;
-    info->modifiedTime = mNode->modifiedTime;
-    info->accessedTime = mNode->modifiedTime;
-    info->permissions = 0755;
-    info->uid = 0;
-    info->gid = 0;
-    
-    return true;
-}
-
-void RamFsDirectory::init(RamFsNode* node) {
-    stringCopy(mPath, node->name, MAX_PATH);
-    mNode = node;
-    mCurrent = node->children;
-    mClosed = false;
-}
-
-RamFsDirectory::~RamFsDirectory() {
-    close();
-}
-
-bool RamFsDirectory::readEntry(DirEntry* entry) {
-    if (mClosed || !entry || !mCurrent) {
-        return false;
-    }
-    
-    stringCopy(entry->name, mCurrent->name, MAX_FILENAME);
-    entry->type = mCurrent->type;
-    entry->inode = reinterpret_cast<u64>(mCurrent);
-    
-    mCurrent = mCurrent->next;
-    return true;
-}
-
-bool RamFsDirectory::rewind() {
-    if (mClosed || !mNode) {
-        return false;
-    }
-    mCurrent = mNode->children;
-    return true;
-}
-
-bool RamFsDirectory::close() {
-    if (mClosed) {
-        return false;
-    }
-    mClosed = true;
-    return true;
-}
-
-usize RamFsDirectory::count() {
-    if (!mNode) {
-        return 0;
-    }
-    
-    usize cnt = 0;
-    RamFsNode* child = mNode->children;
-    while (child) {
-        cnt++;
-        child = child->next;
-    }
-    return cnt;
-}
-
-RamFs::RamFs() : mRoot(nullptr), mNodeCount(0) {
-    stringCopy(mName, "ramfs", 32);
-    mMounted = false;
-}
-
-RamFs::~RamFs() {
-    unmount();
-}
-
-bool RamFs::mount(const char* mountPoint) {
-    if (mMounted || !mountPoint) {
-        return false;
-    }
-    
-    mRoot = createNode("/", FileType::Directory, nullptr);
-    if (!mRoot) {
-        return false;
-    }
-    
-    stringCopy(mMountPoint, mountPoint, MAX_PATH);
-    mMounted = true;
-    return true;
-}
-
-bool RamFs::unmount() {
-    if (!mMounted) {
-        return false;
-    }
-    
-    if (mRoot) {
-        deleteNode(mRoot);
-        mRoot = nullptr;
-    }
-    
-    mMounted = false;
-    mNodeCount = 0;
-    return true;
-}
-
-FileNode* RamFs::open(const char* path, u32 flags) {
-    if (!mMounted || !path) {
-        return nullptr;
-    }
-    
-    const char* relativePath = skipMountPoint(path);
-    RamFsNode* node = findNode(relativePath);
-    
-    if (!node) {
-        if (flags & O_CREATE) {
-            if (!createFile(path)) {
-                return nullptr;
-            }
-            node = findNode(relativePath);
-        }
-        if (!node) {
-            return nullptr;
-        }
-    }
-    
-    if (node->type != FileType::Regular) {
-        return nullptr;
-    }
-    
-    if (flags & O_TRUNCATE) {
-        node->size = 0;
-    }
-    
-    void* mem = memory::PMM::allocatePage();
-    if (!mem) {
-        return nullptr;
-    }
-    
-    auto* file = static_cast<RamFsFile*>(mem);
-    file->init(node);
-    
-    if (flags & O_APPEND) {
-        file->seek(0, SeekMode::End);
-    }
-    
-    return file;
-}
-
-DirectoryNode* RamFs::openDir(const char* path) {
-    if (!mMounted || !path) {
-        return nullptr;
+    if (!sMounted || !path) {
+        return handle;
     }
     
     const char* relativePath = skipMountPoint(path);
     RamFsNode* node = findNode(relativePath);
     
     if (!node || node->type != FileType::Directory) {
-        return nullptr;
+        return handle;
     }
     
-    void* mem = memory::PMM::allocatePage();
-    if (!mem) {
-        return nullptr;
+    for (usize i = 0; i < MAX_DIR_HANDLES; i++) {
+        if (!sDirHandles[i].valid) {
+            sDirHandles[i].node = node;
+            sDirHandles[i].current = node->children;
+            sDirHandles[i].valid = true;
+            
+            handle.fsData = &sDirHandles[i];
+            handle.valid = true;
+            return handle;
+        }
     }
     
-    auto* dir = static_cast<RamFsDirectory*>(mem);
-    dir->init(node);
-    return dir;
+    return handle;
+}
+
+bool RamFs::readDir(DirHandle* handle, DirEntry* entry) {
+    if (!handle || !handle->valid || !entry) {
+        return false;
+    }
+    
+    auto* dh = static_cast<RamFsDirHandle*>(handle->fsData);
+    if (!dh || !dh->valid || !dh->current) {
+        return false;
+    }
+    
+    Path::copy(entry->name, dh->current->name, MAX_FILENAME);
+    entry->type = dh->current->type;
+    entry->inode = reinterpret_cast<u64>(dh->current);
+    
+    dh->current = dh->current->next;
+    return true;
+}
+
+bool RamFs::closeDir(DirHandle* handle) {
+    if (!handle || !handle->valid) {
+        return false;
+    }
+    
+    auto* dh = static_cast<RamFsDirHandle*>(handle->fsData);
+    if (!dh || !dh->valid) {
+        return false;
+    }
+    
+    dh->valid = false;
+    dh->node = nullptr;
+    dh->current = nullptr;
+    handle->valid = false;
+    handle->fsData = nullptr;
+    
+    return true;
 }
 
 bool RamFs::exists(const char* path) {
-    if (!mMounted || !path) {
+    if (!sMounted || !path) {
         return false;
     }
     
@@ -351,7 +337,7 @@ bool RamFs::exists(const char* path) {
 }
 
 bool RamFs::isFile(const char* path) {
-    if (!mMounted || !path) {
+    if (!sMounted || !path) {
         return false;
     }
     
@@ -361,7 +347,7 @@ bool RamFs::isFile(const char* path) {
 }
 
 bool RamFs::isDirectory(const char* path) {
-    if (!mMounted || !path) {
+    if (!sMounted || !path) {
         return false;
     }
     
@@ -371,7 +357,7 @@ bool RamFs::isDirectory(const char* path) {
 }
 
 bool RamFs::createFile(const char* path) {
-    if (!mMounted || !path) {
+    if (!sMounted || !path) {
         return false;
     }
     
@@ -393,7 +379,7 @@ bool RamFs::createFile(const char* path) {
 }
 
 bool RamFs::createDirectory(const char* path) {
-    if (!mMounted || !path) {
+    if (!sMounted || !path) {
         return false;
     }
     
@@ -415,14 +401,14 @@ bool RamFs::createDirectory(const char* path) {
 }
 
 bool RamFs::remove(const char* path) {
-    if (!mMounted || !path) {
+    if (!sMounted || !path) {
         return false;
     }
     
     const char* relativePath = skipMountPoint(path);
     RamFsNode* node = findNode(relativePath);
     
-    if (!node || node == mRoot) {
+    if (!node || node == sRoot) {
         return false;
     }
     
@@ -451,13 +437,13 @@ bool RamFs::remove(const char* path) {
     }
     
     memory::PMM::freePage(node);
-    mNodeCount--;
+    sNodeCount--;
     
     return true;
 }
 
 bool RamFs::rename(const char* oldPath, const char* newPath) {
-    if (!mMounted || !oldPath || !newPath) {
+    if (!sMounted || !oldPath || !newPath) {
         return false;
     }
     
@@ -465,7 +451,7 @@ bool RamFs::rename(const char* oldPath, const char* newPath) {
     const char* newRelative = skipMountPoint(newPath);
     
     RamFsNode* node = findNode(oldRelative);
-    if (!node || node == mRoot) {
+    if (!node || node == sRoot) {
         return false;
     }
     
@@ -495,7 +481,7 @@ bool RamFs::rename(const char* oldPath, const char* newPath) {
         }
     }
     
-    stringCopy(node->name, newName, MAX_FILENAME);
+    Path::copy(node->name, newName, MAX_FILENAME);
     node->parent = newParent;
     node->next = newParent->children;
     newParent->children = node;
@@ -504,7 +490,7 @@ bool RamFs::rename(const char* oldPath, const char* newPath) {
 }
 
 bool RamFs::getInfo(const char* path, FileInfo* info) {
-    if (!mMounted || !path || !info) {
+    if (!sMounted || !path || !info) {
         return false;
     }
     
@@ -515,7 +501,7 @@ bool RamFs::getInfo(const char* path, FileInfo* info) {
         return false;
     }
     
-    stringCopy(info->name, node->name, MAX_FILENAME);
+    Path::copy(info->name, node->name, MAX_FILENAME);
     info->type = node->type;
     info->size = node->size;
     info->createdTime = node->createdTime;
@@ -529,15 +515,15 @@ bool RamFs::getInfo(const char* path, FileInfo* info) {
 }
 
 RamFsNode* RamFs::findNode(const char* path) {
-    if (!path || !mRoot) {
+    if (!path || !sRoot) {
         return nullptr;
     }
     
     if (path[0] == '/' && path[1] == '\0') {
-        return mRoot;
+        return sRoot;
     }
     
-    RamFsNode* current = mRoot;
+    RamFsNode* current = sRoot;
     const char* p = path;
     
     if (*p == '/') p++;
@@ -560,7 +546,7 @@ RamFsNode* RamFs::findNode(const char* path) {
         
         RamFsNode* child = current->children;
         while (child) {
-            if (stringCompare(child->name, component) == 0) {
+            if (Path::compare(child->name, component) == 0) {
                 break;
             }
             child = child->next;
@@ -577,7 +563,7 @@ RamFsNode* RamFs::findNode(const char* path) {
 }
 
 RamFsNode* RamFs::findParent(const char* path, char* childName) {
-    if (!path || !childName || !mRoot) {
+    if (!path || !childName || !sRoot) {
         return nullptr;
     }
     
@@ -591,8 +577,8 @@ RamFsNode* RamFs::findParent(const char* path, char* childName) {
     }
     
     if (!lastSlash || lastSlash == path) {
-        stringCopy(childName, path[0] == '/' ? path + 1 : path, MAX_FILENAME);
-        return mRoot;
+        Path::copy(childName, path[0] == '/' ? path + 1 : path, MAX_FILENAME);
+        return sRoot;
     }
     
     char parentPath[MAX_PATH];
@@ -603,13 +589,13 @@ RamFsNode* RamFs::findParent(const char* path, char* childName) {
     }
     parentPath[i] = '\0';
     
-    stringCopy(childName, lastSlash + 1, MAX_FILENAME);
+    Path::copy(childName, lastSlash + 1, MAX_FILENAME);
     
     return findNode(parentPath);
 }
 
 RamFsNode* RamFs::createNode(const char* name, FileType type, RamFsNode* parent) {
-    if (mNodeCount >= RAMFS_MAX_FILES) {
+    if (sNodeCount >= RAMFS_MAX_FILES) {
         return nullptr;
     }
     
@@ -619,7 +605,7 @@ RamFsNode* RamFs::createNode(const char* name, FileType type, RamFsNode* parent)
     }
     
     memorySet(node, 0, sizeof(RamFsNode));
-    stringCopy(node->name, name, MAX_FILENAME);
+    Path::copy(node->name, name, MAX_FILENAME);
     node->type = type;
     node->data = nullptr;
     node->size = 0;
@@ -635,7 +621,7 @@ RamFsNode* RamFs::createNode(const char* name, FileType type, RamFsNode* parent)
         parent->children = node;
     }
     
-    mNodeCount++;
+    sNodeCount++;
     return node;
 }
 
@@ -657,15 +643,15 @@ void RamFs::deleteNode(RamFsNode* node) {
     }
     
     memory::PMM::freePage(node);
-    mNodeCount--;
+    sNodeCount--;
 }
 
 const char* RamFs::skipMountPoint(const char* path) {
-    usize mountLen = stringLength(mMountPoint);
+    usize mountLen = Path::length(sMountPoint);
     
-    if (mountLen > 0 && path[0] == '/' && mMountPoint[0] == '/') {
+    if (mountLen > 0 && path[0] == '/' && sMountPoint[0] == '/') {
         const char* p = path;
-        const char* m = mMountPoint;
+        const char* m = sMountPoint;
         
         while (*m && *p == *m) {
             p++;
