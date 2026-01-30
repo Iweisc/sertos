@@ -2,6 +2,13 @@
 #include "../include/idt.h"
 #include "../include/ports.h"
 
+#define PS2_DATA_PORT    0x60
+#define PS2_STATUS_PORT  0x64
+#define PS2_COMMAND_PORT 0x64
+
+#define PS2_STATUS_OUTPUT_FULL  0x01
+#define PS2_STATUS_INPUT_FULL   0x02
+
 static bool key_states[256];
 static bool shift_pressed = false;
 static bool ctrl_pressed = false;
@@ -24,10 +31,32 @@ static const char scancode_to_ascii_upper[] = {
     '*', 0, ' ', 0
 };
 
+static void ps2_wait_input(void) {
+    int timeout = 100000;
+    while (timeout-- > 0) {
+        if ((inb(PS2_STATUS_PORT) & PS2_STATUS_INPUT_FULL) == 0) {
+            return;
+        }
+    }
+}
+
+static void ps2_wait_output(void) {
+    int timeout = 100000;
+    while (timeout-- > 0) {
+        if ((inb(PS2_STATUS_PORT) & PS2_STATUS_OUTPUT_FULL) != 0) {
+            return;
+        }
+    }
+}
+
 static void keyboard_handler(registers_t* regs) {
     (void)regs;
     
-    uint8_t scancode = inb(KEYBOARD_DATA_PORT);
+    if ((inb(PS2_STATUS_PORT) & PS2_STATUS_OUTPUT_FULL) == 0) {
+        return;
+    }
+    
+    uint8_t scancode = inb(PS2_DATA_PORT);
     bool released = (scancode & 0x80) != 0;
     uint8_t key = scancode & 0x7F;
     
@@ -69,6 +98,31 @@ void keyboard_init(void) {
     for (int i = 0; i < 256; i++) {
         key_states[i] = false;
     }
+    
+    while (inb(PS2_STATUS_PORT) & PS2_STATUS_OUTPUT_FULL) {
+        inb(PS2_DATA_PORT);
+    }
+    
+    ps2_wait_input();
+    outb(PS2_COMMAND_PORT, 0xAE);
+    
+    ps2_wait_input();
+    outb(PS2_COMMAND_PORT, 0x20);
+    ps2_wait_output();
+    uint8_t config = inb(PS2_DATA_PORT);
+    
+    config |= 0x01;
+    config &= ~0x10;
+    
+    ps2_wait_input();
+    outb(PS2_COMMAND_PORT, 0x60);
+    ps2_wait_input();
+    outb(PS2_DATA_PORT, config);
+    
+    ps2_wait_input();
+    outb(PS2_DATA_PORT, 0xF4);
+    ps2_wait_output();
+    inb(PS2_DATA_PORT);
     
     register_interrupt_handler(IRQ1, keyboard_handler);
 }
