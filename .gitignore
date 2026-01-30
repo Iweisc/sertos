@@ -1,0 +1,20 @@
+# Build artifacts
+build/
+*.o
+*.a
+*.elf
+*.bin
+*.img
+*.iso
+*.EFI
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS specific
+.DS_Store
+Thumbs.db

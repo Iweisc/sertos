@@ -162,12 +162,7 @@ extern "C" void kernelMain(sertos::boot::BootInfo* bootInfo) {
     Framebuffer::initialize(bootInfo->framebuffer);
     Console::initialize();
     
-    Console::setForeground(Color::cyan());
-    Console::println("========================================");
-    Console::println("         SertOS - UEFI Edition          ");
-    Console::println("========================================");
-    Console::setForeground(Color::white());
-    Console::println("");
+
     
     Console::print("Framebuffer: ");
     Console::printDec(Framebuffer::width());
@@ -288,20 +283,6 @@ extern "C" void kernelMain(sertos::boot::BootInfo* bootInfo) {
                         Console::setForeground(Color::green());
                         Console::println("Filesystem created and mounted");
                         Console::setForeground(Color::white());
-                        
-                        SertFs::createDirectory("/bin");
-                        SertFs::createDirectory("/etc");
-                        SertFs::createDirectory("/home");
-                        SertFs::createDirectory("/tmp");
-                        SertFs::createDirectory("/var");
-                        
-                        FileHandle motdFile = SertFs::open("/etc/motd", O_WRITE | O_CREATE);
-                        if (motdFile.valid) {
-                            const char* motd = "Welcome to SertOS!\nType 'help' for available commands.\n";
-                            SertFs::write(&motdFile, motd, 56);
-                            SertFs::close(&motdFile);
-                        }
-                        
                         fsReady = true;
                     }
                 }
