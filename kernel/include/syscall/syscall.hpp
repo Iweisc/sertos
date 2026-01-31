@@ -21,7 +21,82 @@ constexpr u64 SYS_YIELD = 12;
 constexpr u64 SYS_SLEEP = 13;
 constexpr u64 SYS_GETTIME = 14;
 
-constexpr u64 SYSCALL_MAX = 32;
+constexpr u64 SYS_GETUID = 15;
+constexpr u64 SYS_GETGID = 16;
+constexpr u64 SYS_SETUID = 17;
+constexpr u64 SYS_SETGID = 18;
+constexpr u64 SYS_GETEUID = 19;
+constexpr u64 SYS_GETEGID = 20;
+constexpr u64 SYS_SETEUID = 21;
+constexpr u64 SYS_SETEGID = 22;
+
+constexpr u64 SYS_PIPE = 23;
+constexpr u64 SYS_DUP = 24;
+constexpr u64 SYS_DUP2 = 25;
+constexpr u64 SYS_LSEEK = 26;
+constexpr u64 SYS_STAT = 27;
+constexpr u64 SYS_FSTAT = 28;
+constexpr u64 SYS_MKDIR = 29;
+constexpr u64 SYS_RMDIR = 30;
+constexpr u64 SYS_UNLINK = 31;
+constexpr u64 SYS_RENAME = 32;
+constexpr u64 SYS_CHDIR = 33;
+constexpr u64 SYS_GETCWD = 34;
+
+constexpr u64 SYS_KILL = 35;
+constexpr u64 SYS_SIGNAL = 36;
+constexpr u64 SYS_SIGACTION = 37;
+constexpr u64 SYS_SIGPROCMASK = 38;
+constexpr u64 SYS_SIGSUSPEND = 39;
+
+constexpr u64 SYS_SHMGET = 40;
+constexpr u64 SYS_SHMAT = 41;
+constexpr u64 SYS_SHMDT = 42;
+constexpr u64 SYS_SHMCTL = 43;
+
+constexpr u64 SYS_MSGGET = 44;
+constexpr u64 SYS_MSGSND = 45;
+constexpr u64 SYS_MSGRCV = 46;
+constexpr u64 SYS_MSGCTL = 47;
+
+constexpr u64 SYS_SOCKET = 48;
+constexpr u64 SYS_BIND = 49;
+constexpr u64 SYS_LISTEN = 50;
+constexpr u64 SYS_ACCEPT = 51;
+constexpr u64 SYS_CONNECT = 52;
+constexpr u64 SYS_SEND = 53;
+constexpr u64 SYS_RECV = 54;
+constexpr u64 SYS_SHUTDOWN = 55;
+
+constexpr u64 SYS_MPROTECT = 56;
+constexpr u64 SYS_GETPPID = 57;
+constexpr u64 SYS_GETPGID = 58;
+constexpr u64 SYS_SETPGID = 59;
+constexpr u64 SYS_SETSID = 60;
+constexpr u64 SYS_GETSID = 61;
+
+constexpr u64 SYS_IOCTL = 62;
+constexpr u64 SYS_FCNTL = 63;
+
+constexpr u64 SYS_CLOCK_GETTIME = 64;
+constexpr u64 SYS_CLOCK_SETTIME = 65;
+constexpr u64 SYS_NANOSLEEP = 66;
+
+constexpr u64 SYS_GETRLIMIT = 67;
+constexpr u64 SYS_SETRLIMIT = 68;
+constexpr u64 SYS_GETRUSAGE = 69;
+
+constexpr u64 SYS_UNAME = 70;
+constexpr u64 SYS_SYSINFO = 71;
+
+constexpr u64 SYS_PRCTL = 72;
+constexpr u64 SYS_CAPGET = 73;
+constexpr u64 SYS_CAPSET = 74;
+
+constexpr u64 SYS_REBOOT = 75;
+constexpr u64 SYS_SYNC = 76;
+
+constexpr u64 SYSCALL_MAX = 128;
 
 constexpr i64 ENOSYS = -38;
 constexpr i64 EINVAL = -22;
@@ -29,7 +104,42 @@ constexpr i64 ENOMEM = -12;
 constexpr i64 EBADF = -9;
 constexpr i64 EFAULT = -14;
 constexpr i64 ECHILD = -10;
+constexpr i64 EPERM = -1;
+constexpr i64 ENOENT = -2;
+constexpr i64 ESRCH = -3;
+constexpr i64 EINTR = -4;
+constexpr i64 EIO = -5;
+constexpr i64 ENXIO = -6;
+constexpr i64 E2BIG = -7;
+constexpr i64 ENOEXEC = -8;
+constexpr i64 EAGAIN = -11;
+constexpr i64 EACCES = -13;
+constexpr i64 EBUSY = -16;
+constexpr i64 EEXIST = -17;
+constexpr i64 EXDEV = -18;
+constexpr i64 ENODEV = -19;
+constexpr i64 ENOTDIR = -20;
+constexpr i64 EISDIR = -21;
+constexpr i64 ENFILE = -23;
+constexpr i64 EMFILE = -24;
+constexpr i64 ENOTTY = -25;
+constexpr i64 ETXTBSY = -26;
+constexpr i64 EFBIG = -27;
+constexpr i64 ENOSPC = -28;
+constexpr i64 ESPIPE = -29;
+constexpr i64 EROFS = -30;
+constexpr i64 EMLINK = -31;
+constexpr i64 EPIPE = -32;
+constexpr i64 EDOM = -33;
+constexpr i64 ERANGE = -34;
+constexpr i64 EDEADLK = -35;
+constexpr i64 ENAMETOOLONG = -36;
+constexpr i64 ENOLCK = -37;
+constexpr i64 ENOTEMPTY = -39;
+constexpr i64 ELOOP = -40;
+constexpr i64 EWOULDBLOCK = EAGAIN;
 
+constexpr u64 STDIN_FD = 0;
 constexpr u64 STDOUT_FD = 1;
 constexpr u64 STDERR_FD = 2;
 

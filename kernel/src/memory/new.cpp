@@ -1,11 +1,49 @@
 #include "../../include/memory/new.hpp"
+#include "../../include/memory/pmm.hpp"
 
-void operator delete(void*) noexcept {}
-void operator delete[](void*) noexcept {}
-void operator delete(void*, unsigned long) noexcept {}
-void operator delete[](void*, unsigned long) noexcept {}
-void operator delete(void*, unsigned long long) noexcept {}
-void operator delete[](void*, unsigned long long) noexcept {}
+void* operator new(unsigned long long size) {
+    return sertos::memory::PMM::allocatePages((size + 4095) / 4096);
+}
+
+void* operator new[](unsigned long long size) {
+    return sertos::memory::PMM::allocatePages((size + 4095) / 4096);
+}
+
+void operator delete(void* ptr) noexcept {
+    if (ptr) {
+        sertos::memory::PMM::freePages(ptr, 1);
+    }
+}
+
+void operator delete[](void* ptr) noexcept {
+    if (ptr) {
+        sertos::memory::PMM::freePages(ptr, 1);
+    }
+}
+
+void operator delete(void* ptr, unsigned long) noexcept {
+    if (ptr) {
+        sertos::memory::PMM::freePages(ptr, 1);
+    }
+}
+
+void operator delete[](void* ptr, unsigned long) noexcept {
+    if (ptr) {
+        sertos::memory::PMM::freePages(ptr, 1);
+    }
+}
+
+void operator delete(void* ptr, unsigned long long) noexcept {
+    if (ptr) {
+        sertos::memory::PMM::freePages(ptr, 1);
+    }
+}
+
+void operator delete[](void* ptr, unsigned long long) noexcept {
+    if (ptr) {
+        sertos::memory::PMM::freePages(ptr, 1);
+    }
+}
 
 extern "C" {
     void* __dso_handle = nullptr;

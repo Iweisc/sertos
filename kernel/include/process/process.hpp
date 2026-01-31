@@ -7,6 +7,9 @@ namespace sertos::process {
 
 constexpr u32 MAX_PROCESSES = 256;
 constexpr u32 PROCESS_NAME_MAX = 64;
+constexpr u32 MAX_SIGNALS = 32;
+constexpr u32 MAX_FDS = 64;
+constexpr u32 MAX_CWD_LEN = 256;
 
 enum class ProcessState : u8 {
     Invalid = 0,
@@ -16,6 +19,22 @@ enum class ProcessState : u8 {
     Sleeping,
     Zombie,
     Terminated
+};
+
+enum class FdType : u8 {
+    None = 0,
+    File,
+    Pipe,
+    Console,
+    Socket
+};
+
+struct FileDescriptor {
+    FdType type;
+    u32 flags;
+    u64 offset;
+    void* data;
+    bool valid;
 };
 
 struct CpuContext {
@@ -35,6 +54,7 @@ struct Process {
     i32 exitCode;
     
     char name[PROCESS_NAME_MAX];
+    char cwd[MAX_CWD_LEN];
     
     memory::PageTable* pageTable;
     
@@ -50,6 +70,19 @@ struct Process {
     
     u64 cpuTime;
     u64 startTime;
+    
+    u32 uid;
+    u32 gid;
+    u32 euid;
+    u32 egid;
+    u32 pgid;
+    u32 sid;
+    
+    FileDescriptor fds[MAX_FDS];
+    
+    u64 signalHandlers[MAX_SIGNALS];
+    u64 pendingSignals;
+    u64 blockedSignals;
     
     Process* next;
     Process* prev;

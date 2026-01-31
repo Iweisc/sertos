@@ -7,10 +7,22 @@
 #include "../include/cpu/idt.hpp"
 #include "../include/cpu/pic.hpp"
 #include "../include/cpu/io.hpp"
+#include "../include/cpu/smp.hpp"
 #include "../include/disk/ata.hpp"
 #include "../include/fs/sertfs.hpp"
 #include "../include/input/keyboard.hpp"
 #include "../include/shell/shell.hpp"
+#include "../include/process/process.hpp"
+#include "../include/process/scheduler.hpp"
+#include "../include/syscall/syscall.hpp"
+#include "../include/ipc/ipc.hpp"
+#include "../include/user/user.hpp"
+#include "../include/security/security.hpp"
+#include "../include/power/acpi.hpp"
+#include "../include/drivers/usb.hpp"
+#include "../include/drivers/audio.hpp"
+#include "../include/drivers/gpu.hpp"
+#include "../include/loader/dynamic.hpp"
 
 namespace sertos {
 
@@ -156,13 +168,18 @@ extern "C" void kernelMain(sertos::boot::BootInfo* bootInfo) {
     using namespace sertos::disk;
     using namespace sertos::input;
     using namespace sertos::shell;
+    using namespace sertos::process;
+    using namespace sertos::ipc;
+    using namespace sertos::user;
+    using namespace sertos::security;
+    using namespace sertos::power;
+    using namespace sertos::drivers;
+    using namespace sertos::loader;
     
     Kernel::initialize(bootInfo);
     
     Framebuffer::initialize(bootInfo->framebuffer);
     Console::initialize();
-    
-
     
     Console::print("Framebuffer: ");
     Console::printDec(Framebuffer::width());
@@ -295,6 +312,159 @@ extern "C" void kernelMain(sertos::boot::BootInfo* bootInfo) {
         Console::println("FAILED");
         Console::setForeground(Color::white());
         Console::println("  Warning: No persistent storage available");
+    }
+    
+    Console::print("Initializing VMM... ");
+    VMM::initialize();
+    if (VMM::isInitialized()) {
+        Console::setForeground(Color::green());
+        Console::println("OK");
+        Console::setForeground(Color::white());
+    } else {
+        Console::setForeground(Color::red());
+        Console::println("FAILED");
+        Console::setForeground(Color::white());
+    }
+    
+    Console::print("Initializing Process Manager... ");
+    PM::initialize();
+    if (PM::isInitialized()) {
+        Console::setForeground(Color::green());
+        Console::println("OK");
+        Console::setForeground(Color::white());
+    } else {
+        Console::setForeground(Color::red());
+        Console::println("FAILED");
+        Console::setForeground(Color::white());
+    }
+    
+    Console::print("Initializing Scheduler... ");
+    Scheduler::initialize();
+    if (Scheduler::isInitialized()) {
+        Console::setForeground(Color::green());
+        Console::println("OK");
+        Console::setForeground(Color::white());
+    } else {
+        Console::setForeground(Color::red());
+        Console::println("FAILED");
+        Console::setForeground(Color::white());
+    }
+    
+    Console::print("Initializing Syscalls... ");
+    syscall::Syscall::initialize();
+    syscall::registerAllHandlers();
+    Console::setForeground(Color::green());
+    Console::println("OK");
+    Console::setForeground(Color::white());
+    
+    Console::print("Initializing IPC... ");
+    IPC::initialize();
+    if (IPC::isInitialized()) {
+        Console::setForeground(Color::green());
+        Console::println("OK");
+        Console::setForeground(Color::white());
+    } else {
+        Console::setForeground(Color::red());
+        Console::println("FAILED");
+        Console::setForeground(Color::white());
+    }
+    
+    Console::print("Initializing User Manager... ");
+    UserManager::initialize();
+    if (UserManager::isInitialized()) {
+        Console::setForeground(Color::green());
+        Console::println("OK");
+        Console::setForeground(Color::white());
+    } else {
+        Console::setForeground(Color::red());
+        Console::println("FAILED");
+        Console::setForeground(Color::white());
+    }
+    
+    Console::print("Initializing Security Manager... ");
+    SecurityManager::initialize();
+    if (SecurityManager::isInitialized()) {
+        Console::setForeground(Color::green());
+        Console::println("OK");
+        Console::setForeground(Color::white());
+    } else {
+        Console::setForeground(Color::red());
+        Console::println("FAILED");
+        Console::setForeground(Color::white());
+    }
+    
+    Console::print("Initializing ACPI/Power Management... ");
+    PowerManager::initialize();
+    if (PowerManager::isInitialized()) {
+        Console::setForeground(Color::green());
+        Console::println("OK");
+        Console::setForeground(Color::white());
+    } else {
+        Console::setForeground(Color::yellow());
+        Console::println("Not available");
+        Console::setForeground(Color::white());
+    }
+    
+    Console::print("Initializing SMP... ");
+    SMP::initialize();
+    if (SMP::isInitialized()) {
+        Console::setForeground(Color::green());
+        Console::print("OK (");
+        Console::printDec(SMP::cpuCount());
+        Console::println(" CPUs)");
+        Console::setForeground(Color::white());
+    } else {
+        Console::setForeground(Color::yellow());
+        Console::println("Single CPU mode");
+        Console::setForeground(Color::white());
+    }
+    
+    Console::print("Initializing USB... ");
+    UsbDriver::initialize();
+    if (UsbDriver::isInitialized()) {
+        Console::setForeground(Color::green());
+        Console::println("OK");
+        Console::setForeground(Color::white());
+    } else {
+        Console::setForeground(Color::yellow());
+        Console::println("No USB controller found");
+        Console::setForeground(Color::white());
+    }
+    
+    Console::print("Initializing Audio... ");
+    AudioDriver::initialize();
+    if (AudioDriver::isInitialized()) {
+        Console::setForeground(Color::green());
+        Console::println("OK");
+        Console::setForeground(Color::white());
+    } else {
+        Console::setForeground(Color::yellow());
+        Console::println("No audio device found");
+        Console::setForeground(Color::white());
+    }
+    
+    Console::print("Initializing GPU... ");
+    GpuDriver::initialize();
+    if (GpuDriver::isInitialized()) {
+        Console::setForeground(Color::green());
+        Console::println("OK");
+        Console::setForeground(Color::white());
+    } else {
+        Console::setForeground(Color::yellow());
+        Console::println("Using framebuffer only");
+        Console::setForeground(Color::white());
+    }
+    
+    Console::print("Initializing Dynamic Linker... ");
+    DynamicLinker::initialize();
+    if (DynamicLinker::isInitialized()) {
+        Console::setForeground(Color::green());
+        Console::println("OK");
+        Console::setForeground(Color::white());
+    } else {
+        Console::setForeground(Color::yellow());
+        Console::println("Static linking only");
+        Console::setForeground(Color::white());
     }
     
     PIC::clearMask(0);
