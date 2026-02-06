@@ -2,6 +2,7 @@
 
 #include "../types.hpp"
 #include "../fs/sertfs.hpp"
+#include "../graphics/framebuffer.hpp"
 
 namespace sertos::shell {
 
@@ -15,11 +16,20 @@ struct Command {
     void (*handler)(int argc, char** argv);
 };
 
+using ShellPrintCallback = void (*)(const char*);
+using ShellPutCharCallback = void (*)(char);
+using ShellSetColorCallback = void (*)(graphics::Color);
+using ShellClearCallback = void (*)();
+
 class Shell {
 public:
     static void initialize();
     static void run();
     static void executeCommand(const char* cmdLine);
+
+    static void setOutputCallbacks(ShellPrintCallback print, ShellPutCharCallback putChar,
+                                   ShellSetColorCallback setColor, ShellClearCallback clear);
+    static void clearOutputCallbacks();
 
 private:
     static void printPrompt();
@@ -52,6 +62,12 @@ private:
     static bool sRunning;
     static bool sInitialized;
     static char sArgBuffer[MAX_ARGS][MAX_ARG_LENGTH];
+
+public:
+    static ShellPrintCallback sPrintCallback;
+    static ShellPutCharCallback sPutCharCallback;
+    static ShellSetColorCallback sSetColorCallback;
+    static ShellClearCallback sClearCallback;
 };
 
 }

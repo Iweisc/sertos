@@ -452,7 +452,7 @@ bool DynamicLinker::isInitialized() {
 SharedLibrary* DynamicLinker::loadElfLibrary(const char* path, u64 baseAddress) {
     if (!path) return nullptr;
     
-    fs::FileHandle file = fs::SertFs::open(path, fs::O_READ);
+    fs::FileHandle file = fs::SertFs::open(path, fs::SERTFS_O_READ);
     if (!file.valid) return nullptr;
     
     SharedLibrary* lib = nullptr;

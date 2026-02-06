@@ -17,11 +17,11 @@ constexpr u32 SERTFS_INVALID_BLOCK = 0xFFFFFFFF;
 constexpr u32 SERTFS_DIRECT_BLOCKS = 12;
 constexpr u32 SERTFS_NAME_MAX = 255;
 
-constexpr u32 O_READ = 0x01;
-constexpr u32 O_WRITE = 0x02;
-constexpr u32 O_APPEND = 0x04;
-constexpr u32 O_CREATE = 0x08;
-constexpr u32 O_TRUNCATE = 0x10;
+constexpr u32 SERTFS_O_READ = 0x01;
+constexpr u32 SERTFS_O_WRITE = 0x02;
+constexpr u32 SERTFS_O_APPEND = 0x04;
+constexpr u32 SERTFS_O_CREATE = 0x08;
+constexpr u32 SERTFS_O_TRUNCATE = 0x10;
 
 enum class FileType : u8 {
     Unknown = 0,

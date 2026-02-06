@@ -8,6 +8,8 @@ namespace sertos::graphics {
 struct Color {
     u8 r, g, b, a;
     
+    constexpr Color() : r(0), g(0), b(0), a(255) {}
+    
     constexpr Color(u8 red, u8 green, u8 blue, u8 alpha = 255)
         : r(red), g(green), b(blue), a(alpha) {}
     

@@ -96,7 +96,66 @@ constexpr u64 SYS_CAPSET = 74;
 constexpr u64 SYS_REBOOT = 75;
 constexpr u64 SYS_SYNC = 76;
 
-constexpr u64 SYSCALL_MAX = 128;
+constexpr u64 SYS_CLONE = 77;
+constexpr u64 SYS_FUTEX = 78;
+constexpr u64 SYS_SET_TID_ADDRESS = 79;
+constexpr u64 SYS_GETTID = 80;
+constexpr u64 SYS_TKILL = 81;
+constexpr u64 SYS_TGKILL = 82;
+constexpr u64 SYS_EXIT_GROUP = 83;
+constexpr u64 SYS_SET_ROBUST_LIST = 84;
+constexpr u64 SYS_GET_ROBUST_LIST = 85;
+
+constexpr u64 SYS_EPOLL_CREATE = 86;
+constexpr u64 SYS_EPOLL_CREATE1 = 87;
+constexpr u64 SYS_EPOLL_CTL = 88;
+constexpr u64 SYS_EPOLL_WAIT = 89;
+constexpr u64 SYS_EPOLL_PWAIT = 90;
+constexpr u64 SYS_POLL = 91;
+constexpr u64 SYS_PPOLL = 92;
+constexpr u64 SYS_SELECT = 93;
+constexpr u64 SYS_PSELECT6 = 94;
+
+constexpr u64 SYS_EVENTFD = 95;
+constexpr u64 SYS_EVENTFD2 = 96;
+constexpr u64 SYS_TIMERFD_CREATE = 97;
+constexpr u64 SYS_TIMERFD_SETTIME = 98;
+constexpr u64 SYS_TIMERFD_GETTIME = 99;
+constexpr u64 SYS_SIGNALFD = 100;
+constexpr u64 SYS_SIGNALFD4 = 101;
+
+constexpr u64 SYS_OPENAT = 102;
+constexpr u64 SYS_MKDIRAT = 103;
+constexpr u64 SYS_UNLINKAT = 104;
+constexpr u64 SYS_RENAMEAT = 105;
+constexpr u64 SYS_FSTATAT = 106;
+constexpr u64 SYS_READLINKAT = 107;
+constexpr u64 SYS_FACCESSAT = 108;
+constexpr u64 SYS_FCHMODAT = 109;
+constexpr u64 SYS_FCHOWNAT = 110;
+
+constexpr u64 SYS_MREMAP = 111;
+constexpr u64 SYS_MADVISE = 112;
+constexpr u64 SYS_MINCORE = 113;
+constexpr u64 SYS_MEMFD_CREATE = 114;
+
+constexpr u64 SYS_GETRANDOM = 115;
+constexpr u64 SYS_PRLIMIT64 = 116;
+constexpr u64 SYS_WAITID = 117;
+
+constexpr u64 SYS_SENDTO = 118;
+constexpr u64 SYS_RECVFROM = 119;
+constexpr u64 SYS_SETSOCKOPT = 120;
+constexpr u64 SYS_GETSOCKOPT = 121;
+constexpr u64 SYS_GETSOCKNAME = 122;
+constexpr u64 SYS_GETPEERNAME = 123;
+constexpr u64 SYS_SOCKETPAIR = 124;
+
+constexpr u64 SYS_ARCH_PRCTL = 125;
+constexpr u64 SYS_READV = 126;
+constexpr u64 SYS_WRITEV = 127;
+
+constexpr u64 SYSCALL_MAX = 256;
 
 constexpr i64 ENOSYS = -38;
 constexpr i64 EINVAL = -22;

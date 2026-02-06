@@ -11,6 +11,7 @@
 #include "../include/disk/ata.hpp"
 #include "../include/fs/sertfs.hpp"
 #include "../include/input/keyboard.hpp"
+#include "../include/input/mouse.hpp"
 #include "../include/shell/shell.hpp"
 #include "../include/process/process.hpp"
 #include "../include/process/scheduler.hpp"
@@ -23,6 +24,14 @@
 #include "../include/drivers/audio.hpp"
 #include "../include/drivers/gpu.hpp"
 #include "../include/loader/dynamic.hpp"
+#include "../include/wm/wm.hpp"
+#include "../include/apps/app.hpp"
+#include "../include/drivers/pci.hpp"
+#include "../include/drivers/virtio_net.hpp"
+#include "../include/net/net.hpp"
+#include "../include/net/socket.hpp"
+#include "../include/net/dns.hpp"
+#include "../include/net/http.hpp"
 
 namespace sertos {
 
@@ -221,7 +230,7 @@ extern "C" void kernelMain(sertos::boot::BootInfo* bootInfo) {
     }
     
     IDT::setHandler(IRQ_TIMER, timerHandler);
-    IDT::setHandler(IRQ_KEYBOARD, keyboardHandler);
+    // Keyboard uses polling instead of IRQ to avoid dual-read race on port 0x60
     
     Console::print("Initializing PMM... ");
     PMM::initialize(bootInfo);
@@ -247,6 +256,18 @@ extern "C" void kernelMain(sertos::boot::BootInfo* bootInfo) {
     Console::setForeground(Color::green());
     Console::println("OK");
     Console::setForeground(Color::white());
+    
+    Console::print("Initializing Mouse... ");
+    Mouse::initialize();
+    if (Mouse::isInitialized()) {
+        Console::setForeground(Color::green());
+        Console::println("OK");
+        Console::setForeground(Color::white());
+    } else {
+        Console::setForeground(Color::yellow());
+        Console::println("Not available");
+        Console::setForeground(Color::white());
+    }
     
     Console::print("Initializing ATA... ");
     ATA::initialize();
@@ -467,6 +488,107 @@ extern "C" void kernelMain(sertos::boot::BootInfo* bootInfo) {
         Console::setForeground(Color::white());
     }
     
+    Console::print("Initializing Window Manager... ");
+    wm::WindowManager::initialize();
+    if (wm::WindowManager::isInitialized()) {
+        Console::setForeground(Color::green());
+        Console::println("OK");
+        Console::setForeground(Color::white());
+    } else {
+        Console::setForeground(Color::red());
+        Console::println("FAILED");
+        Console::setForeground(Color::white());
+    }
+    
+    Console::print("Initializing Taskbar... ");
+    wm::Taskbar::initialize();
+    if (wm::Taskbar::isInitialized()) {
+        Console::setForeground(Color::green());
+        Console::println("OK");
+        Console::setForeground(Color::white());
+    } else {
+        Console::setForeground(Color::red());
+        Console::println("FAILED");
+        Console::setForeground(Color::white());
+    }
+    
+    Console::print("Initializing App Manager... ");
+    apps::AppManager::initialize();
+    if (apps::AppManager::isInitialized()) {
+        Console::setForeground(Color::green());
+        Console::println("OK");
+        Console::setForeground(Color::white());
+    } else {
+        Console::setForeground(Color::red());
+        Console::println("FAILED");
+        Console::setForeground(Color::white());
+    }
+    
+    // Initialize networking
+    Console::print("Initializing PCI... ");
+    drivers::Pci::initialize();
+    Console::setForeground(Color::green());
+    Console::print("OK");
+    Console::setForeground(Color::white());
+    Console::print(" (");
+    Console::printDec(drivers::Pci::deviceCount());
+    Console::println(" devices)");
+
+    Console::print("Initializing Network Stack... ");
+    net::NetworkStack::initialize();
+    net::SocketManager::initialize();
+    Console::setForeground(Color::green());
+    Console::println("OK");
+    Console::setForeground(Color::white());
+
+    Console::print("Initializing VirtIO Network... ");
+    drivers::VirtioNet::initialize();
+    auto* pciNet = drivers::Pci::findDevice(0x1AF4, 0x1000);
+    if (pciNet) {
+        drivers::VirtioNet::probe(pciNet->bus, pciNet->device, pciNet->function);
+        if (drivers::VirtioNet::init(0)) {
+            auto* iface = net::NetworkStack::getDefaultInterface();
+            if (iface) {
+                net::NetworkStack::configureInterface(iface->id,
+                    net::IPv4Address(10, 0, 2, 15),
+                    net::IPv4Address(255, 255, 255, 0),
+                    net::IPv4Address(10, 0, 2, 2));
+                iface->dns = net::IPv4Address(10, 0, 2, 3);
+                net::NetworkStack::setInterfaceUp(iface->id);
+            }
+            net::MacAddress mac = drivers::VirtioNet::getMacAddress(0);
+            Console::setForeground(Color::green());
+            Console::print("OK");
+            Console::setForeground(Color::white());
+            Console::print(" (MAC: ");
+            for (int mi = 0; mi < 6; mi++) {
+                if (mi > 0) Console::print(":");
+                Console::printHex(mac.bytes[mi]);
+            }
+            Console::println(")");
+        } else {
+            Console::setForeground(Color::red());
+            Console::println("INIT FAILED");
+            Console::setForeground(Color::white());
+        }
+    } else {
+        Console::setForeground(Color::yellow());
+        Console::println("No VirtIO NIC found");
+        Console::setForeground(Color::white());
+    }
+
+    Console::print("Initializing DNS... ");
+    net::DnsResolver::initialize();
+    Console::setForeground(Color::green());
+    Console::println("OK");
+    Console::setForeground(Color::white());
+
+    Console::print("Initializing HTTP... ");
+    net::HttpClient::initialize();
+    Console::setForeground(Color::green());
+    Console::println("OK");
+    Console::setForeground(Color::white());
+
     PIC::clearMask(0);
     PIC::clearMask(1);
     
@@ -489,10 +611,233 @@ extern "C" void kernelMain(sertos::boot::BootInfo* bootInfo) {
         Console::println(" MB total");
     }
     
-    Shell::initialize();
-    Shell::run();
+    Console::println("");
+    Console::println("Starting graphical interface...");
+    
+    wm::WindowManager::setDesktopColor(Color(0, 80, 120));
+    
+    static u32 nextWindowX = 100;
+    static u32 nextWindowY = 50;
+    
+    auto launchApp = [](wm::AppType appType) {
+        using namespace wm;
+        
+        WindowFlags flags = WindowFlags::Visible |
+                           WindowFlags::Movable |
+                           WindowFlags::Resizable |
+                           WindowFlags::HasTitlebar |
+                           WindowFlags::HasBorder;
+        
+        const char* title = "Window";
+        u32 width = 600;
+        u32 height = 400;
+        Color bgColor(240, 240, 240);
+        
+        switch (appType) {
+            case AppType::Terminal:
+                title = "Terminal";
+                width = 800;
+                height = 500;
+                bgColor = Color(30, 30, 30);
+                break;
+            case AppType::FileManager:
+                title = "File Manager";
+                width = 700;
+                height = 450;
+                bgColor = Color(250, 250, 250);
+                break;
+            case AppType::TextEditor:
+                title = "Text Editor";
+                width = 650;
+                height = 500;
+                bgColor = Color(255, 255, 255);
+                break;
+            case AppType::Settings:
+                title = "Settings";
+                width = 500;
+                height = 400;
+                bgColor = Color(245, 245, 245);
+                break;
+            case AppType::About:
+                title = "About SertOS";
+                width = 400;
+                height = 300;
+                bgColor = Color(240, 240, 250);
+                break;
+            case AppType::Browser:
+                title = "Web Browser";
+                width = 800;
+                height = 600;
+                bgColor = Color(250, 250, 250);
+                break;
+        }
+        
+        u32 winId = WindowManager::createWindow(title,
+            static_cast<i32>(nextWindowX),
+            static_cast<i32>(nextWindowY),
+            width, height, flags);
+        
+        if (winId != 0) {
+            WindowManager::setWindowBackgroundColor(winId, bgColor);
+            WindowManager::focusWindow(winId);
+            
+            sertos::apps::AppManager::createApp(appType, winId);
+            
+            nextWindowX += 30;
+            nextWindowY += 30;
+            if (nextWindowX > 400) nextWindowX = 100;
+            if (nextWindowY > 300) nextWindowY = 50;
+        }
+    };
+    
+    wm::StartMenu::setLaunchCallback(launchApp);
+    
+    wm::WindowManager::render();
+    wm::Taskbar::render();
+    
+    bool needsRedraw = true;
+    i32 lastMouseX = Mouse::x();
+    i32 lastMouseY = Mouse::y();
+    i32 lastClickX = 0;
+    i32 lastClickY = 0;
+    u32 lastClickWindow = 0;
     
     while (true) {
-        hlt();
+        bool inputProcessed = false;
+        
+        Mouse::poll();
+        
+        while (Mouse::hasEvent()) {
+            MouseEvent mouseEvent = Mouse::getEvent();
+            i32 mx = Mouse::x();
+            i32 my = Mouse::y();
+            
+            bool taskbarHandled = false;
+            if (hasButton(mouseEvent.pressed, MouseButton::Left)) {
+                taskbarHandled = wm::Taskbar::handleClick(mx, my);
+            }
+            
+            if (!taskbarHandled) {
+                wm::WindowManager::handleMouseEvent(mouseEvent);
+                if (hasButton(mouseEvent.pressed, MouseButton::Left)) {
+                    u32 focused = wm::WindowManager::focusedWindow();
+                    if (focused != 0) {
+                        bool sameSpot = (mx - lastClickX) * (mx - lastClickX) + (my - lastClickY) * (my - lastClickY) <= 9;
+                        bool doubleClick = (focused == lastClickWindow) && sameSpot;
+                        lastClickX = mx;
+                        lastClickY = my;
+                        lastClickWindow = focused;
+                        apps::AppManager::handleMouseClick(focused, mx, my, doubleClick);
+                    }
+                }
+            }
+            
+            inputProcessed = true;
+        }
+        
+        if (Mouse::x() != lastMouseX || Mouse::y() != lastMouseY) {
+            lastMouseX = Mouse::x();
+            lastMouseY = Mouse::y();
+            wm::Taskbar::handleMouseMove(lastMouseX, lastMouseY);
+            needsRedraw = true;
+        }
+        
+        // Poll keyboard data from PS/2 controller
+        while (true) {
+            u8 kbStatus = inb(0x64);
+            if ((kbStatus & 0x01) && !(kbStatus & 0x20)) {
+                u8 scancode = inb(0x60);
+                Keyboard::handleScancode(scancode);
+            } else {
+                break;
+            }
+        }
+
+        // Dispatch buffered key events to apps
+        while (Keyboard::hasKey()) {
+            KeyEvent event = Keyboard::getKey();
+            if (event.pressed) {
+                bool windowAction = false;
+
+                if (event.alt) {
+                    i32 moveStep = wm::WindowManager::MOVE_STEP;
+                    switch (event.code) {
+                        case KeyCode::Up:
+                            wm::WindowManager::moveFocusedWindow(0, -moveStep);
+                            windowAction = true;
+                            break;
+                        case KeyCode::Down:
+                            wm::WindowManager::moveFocusedWindow(0, moveStep);
+                            windowAction = true;
+                            break;
+                        case KeyCode::Left:
+                            wm::WindowManager::moveFocusedWindow(-moveStep, 0);
+                            windowAction = true;
+                            break;
+                        case KeyCode::Right:
+                            wm::WindowManager::moveFocusedWindow(moveStep, 0);
+                            windowAction = true;
+                            break;
+                        default:
+                            break;
+                    }
+                } else if (event.ctrl) {
+                    i32 resizeStep = wm::WindowManager::RESIZE_STEP;
+                    switch (event.code) {
+                        case KeyCode::Up:
+                            wm::WindowManager::resizeFocusedWindow(0, -resizeStep);
+                            windowAction = true;
+                            break;
+                        case KeyCode::Down:
+                            wm::WindowManager::resizeFocusedWindow(0, resizeStep);
+                            windowAction = true;
+                            break;
+                        case KeyCode::Left:
+                            wm::WindowManager::resizeFocusedWindow(-resizeStep, 0);
+                            windowAction = true;
+                            break;
+                        case KeyCode::Right:
+                            wm::WindowManager::resizeFocusedWindow(resizeStep, 0);
+                            windowAction = true;
+                            break;
+                        default:
+                            break;
+                    }
+                }
+
+                if (windowAction) {
+                    needsRedraw = true;
+                } else if (event.code == KeyCode::Tab) {
+                    wm::WindowManager::cycleWindowFocus();
+                    needsRedraw = true;
+                } else {
+                    u32 focused = wm::WindowManager::focusedWindow();
+                    if (focused != 0) {
+                        apps::App* focusedApp = apps::AppManager::getApp(focused);
+                        if (focusedApp != nullptr) {
+                            apps::AppManager::handleKeyPress(focused, event.code, event.ascii, event.ctrl, event.alt, event.shift);
+                            needsRedraw = true;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Poll network for incoming packets
+        drivers::VirtioNet::receivePackets(0);
+
+        if (inputProcessed) {
+            needsRedraw = true;
+        }
+
+        if (needsRedraw) {
+            wm::WindowManager::render();
+            
+            wm::Taskbar::render();
+            wm::WindowManager::renderCursor();
+            needsRedraw = false;
+        }
+        
+        asm volatile("pause");
     }
 }

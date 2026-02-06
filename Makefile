@@ -78,18 +78,15 @@ $(BOOTLOADER_EFI): $(ALL_OBJS) | $(BUILD_DIR)
 $(BUILD_DIR)/BOOTX64-asm.EFI: $(BOOT_DIR)/src/minimal_efi.asm | $(BUILD_DIR)
 	nasm -f bin $< -o $@
 
-# Create UEFI bootable image with C++ kernel
+# Create UEFI bootable image with C++ kernel (using mtools - no sudo required)
 $(OS_IMG): $(BOOTLOADER_EFI)
 	@mkdir -p $(ISO_DIR)/EFI/BOOT
 	cp $(BOOTLOADER_EFI) $(ISO_DIR)/EFI/BOOT/BOOTX64.EFI
 	dd if=/dev/zero of=$@ bs=1M count=64 2>/dev/null
 	mkfs.fat -F 32 $@ >/dev/null
-	mkdir -p $(BUILD_DIR)/mnt
-	sudo mount -o loop $@ $(BUILD_DIR)/mnt
-	sudo mkdir -p $(BUILD_DIR)/mnt/EFI/BOOT
-	sudo cp $(ISO_DIR)/EFI/BOOT/BOOTX64.EFI $(BUILD_DIR)/mnt/EFI/BOOT/
-	sudo umount $(BUILD_DIR)/mnt
-	rmdir $(BUILD_DIR)/mnt
+	mmd -i $@ ::/EFI
+	mmd -i $@ ::/EFI/BOOT
+	mcopy -i $@ $(ISO_DIR)/EFI/BOOT/BOOTX64.EFI ::/EFI/BOOT/
 	@echo "Build complete: $(OS_IMG)"
 
 # Create UEFI bootable image with assembly bootloader
@@ -120,7 +117,9 @@ run: $(OS_IMG) $(BUILD_DIR)/storage.img
 		-m 256M \
 		-serial stdio \
 		-no-reboot \
-		-no-shutdown
+		-no-shutdown \
+		-device virtio-net-pci,netdev=net0 \
+		-netdev user,id=net0
 
 # Run assembly bootloader version
 run-asm: $(BUILD_DIR)/sertos-asm.img
@@ -142,6 +141,8 @@ debug: $(OS_IMG) $(BUILD_DIR)/storage.img
 		-serial stdio \
 		-no-reboot \
 		-no-shutdown \
+		-device virtio-net-pci,netdev=net0 \
+		-netdev user,id=net0 \
 		-s -S
 
 # Clean build artifacts

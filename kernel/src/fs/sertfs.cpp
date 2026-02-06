@@ -903,7 +903,7 @@ FileHandle SertFs::open(const char* path, u32 flags) {
     u32 inodeNum = findInode(resolved);
     
     if (inodeNum == 0) {
-        if (flags & O_CREATE) {
+        if (flags & SERTFS_O_CREATE) {
             if (!createFile(resolved)) {
                 return handle;
             }
@@ -923,7 +923,7 @@ FileHandle SertFs::open(const char* path, u32 flags) {
         return handle;
     }
     
-    if (flags & O_TRUNCATE) {
+    if (flags & SERTFS_O_TRUNCATE) {
         freeInodeBlocks(&inode);
         inode.size = 0;
         writeInode(inodeNum, &inode);
@@ -932,7 +932,7 @@ FileHandle SertFs::open(const char* path, u32 flags) {
     for (usize i = 0; i < MAX_FILE_HANDLES; i++) {
         if (!sFileHandles[i].valid) {
             sFileHandles[i].inode = inodeNum;
-            sFileHandles[i].position = (flags & O_APPEND) ? inode.size : 0;
+            sFileHandles[i].position = (flags & SERTFS_O_APPEND) ? inode.size : 0;
             sFileHandles[i].flags = flags;
             sFileHandles[i].valid = true;
             sFileHandles[i].inodeData = inode;
